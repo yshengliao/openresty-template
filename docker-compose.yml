@@ -1,0 +1,22 @@
+services:
+  gateway:
+    build: .
+    image: openresty-template:local
+    container_name: openresty-template
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # 持久化 / 掛載主機目錄，讓開發時修改設定或 Lua 不需要重新 build image
+      - ./conf:/app/conf
+      - ./vhost:/app/vhost
+      - ./script:/app/script
+    env_file:
+      - .env
+    stop_signal: SIGQUIT
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

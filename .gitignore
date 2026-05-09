@@ -1,0 +1,32 @@
+/logs
+/client_body_temp
+/fastcgi_temp
+/proxy_temp
+/scgi_temp
+/uwsgi_temp
+/conf/local
+!/conf/local/*.sample
+
+### VS Code ###
+.vscode/
+
+# local environment shell script
+env.bat
+env.sh
+env.*.bat
+env.*.sh
+.devsettings
+.env
+
+
+.DS_Store
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+servroot
+
+*.log

@@ -1,0 +1,6 @@
+.DS_Store
+
+mock*.vhost
+mock*.vhost.default
+
+!default/*

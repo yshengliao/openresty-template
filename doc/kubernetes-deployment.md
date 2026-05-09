@@ -1,0 +1,203 @@
+# Kubernetes 部署參考
+
+本文件說明將 OpenResty Gateway 部署至 Kubernetes 時的環境變數與設定參考。
+
+---
+
+## 環境變數
+
+### 必要環境變數
+
+在 Kubernetes Deployment 中，需透過 `env` 或 `envFrom` 注入：
+
+| 變數 | 說明 | 範例值 | 必要 |
+|---|---|---|---|
+| `BUILD_COMMIT_TAG` | Git tag / 版本標記 | `v1.2.0` | 建議 |
+| `BUILD_COMMIT_SHA` | Git commit SHA | `abc1234...` | 建議 |
+
+### 選用環境變數（OpenTelemetry）
+
+| 變數 | 說明 | 預設值 | 必要 |
+|---|---|---|---|
+| `JaegerCollector_Host` | Jaeger OTLP collector 位址 | `127.0.0.1` | 啟用追蹤時必填 |
+| `JaegerCollector_OTLPHttpPort` | Jaeger OTLP HTTP port | `4318` | 啟用追蹤時必填 |
+
+### 自定義環境變數
+
+如需新增環境變數：
+
+1. 在 `script/script.env.conf` 加入宣告：
+   ```nginx
+   env YOUR_NEW_VAR;
+   ```
+
+2. 在 `script/config.lua` 的 `_M.ENV` table 讀取：
+   ```lua
+   YOUR_NEW_VAR = os.getenv("YOUR_NEW_VAR") or "default_value",
+   ```
+
+3. 在 Lua 端點中使用：
+   ```lua
+   local config = require("config")
+   local value  = config.ENV.YOUR_NEW_VAR
+   ```
+
+> **注意**：OpenResty/Nginx 不會自動將容器環境變數傳入 Lua runtime，必須在 `script.env.conf` 以 `env VAR_NAME;` 明確宣告。
+
+---
+
+## Deployment 範例
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  labels:
+    app: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: gateway
+          image: your-registry.com/api-gateway:v1.0.0
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: BUILD_COMMIT_TAG
+              value: "v1.0.0"
+            - name: BUILD_COMMIT_SHA
+              value: "abc1234567890"
+          envFrom:
+            - configMapRef:
+                name: gateway-config
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+```
+
+---
+
+## Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
+```
+
+---
+
+## ConfigMap
+
+將非敏感的環境變數放在 ConfigMap：
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  JaegerCollector_Host: "jaeger-collector.observability.svc.cluster.local"
+  JaegerCollector_OTLPHttpPort: "4318"
+```
+
+---
+
+## Secret
+
+敏感資訊（API keys、JWT secrets 等）使用 Secret：
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gateway-secrets
+type: Opaque
+stringData:
+  JWT_SECRET: "your-secret-here"
+```
+
+在 Deployment 引用：
+
+```yaml
+envFrom:
+  - secretRef:
+      name: gateway-secrets
+```
+
+並記得在 `script/script.env.conf` 加入 `env JWT_SECRET;`。
+
+---
+
+## 健康檢查說明
+
+模板內建兩個 health check 端點，均已關閉 access log：
+
+| 端點 | 回應 | 建議用途 |
+|---|---|---|
+| `/healthcheck` | `200 ok` | `livenessProbe` — 確認程序存活 |
+| `/ping` | `200 pong` | `readinessProbe` — 確認可接收流量 |
+
+---
+
+## 多實例部署注意事項
+
+- **Lua code cache**：生產環境務必保持 `lua_code_cache on`（預設值），否則每次請求都會重新載入 Lua 檔案。
+- **worker_processes**：Dockerfile 中預設為 `auto`，在 K8s 中會偵測 Pod 的 CPU limit。如需手動控制，可在 `nginx.conf` 指定。
+- **lua_shared_dict**：跨 worker 的共用記憶體，在 K8s 環境中僅限單一 Pod 內共用，不跨 Pod。如需跨 Pod 共用狀態，應使用外部儲存（Redis 等）。
+- **DNS resolver**：預設使用 `8.8.8.8`。在 K8s 叢集內應改為 CoreDNS：
+  ```nginx
+  # conf/nginx.conf
+  resolver  kube-dns.kube-system.svc.cluster.local  valid=30s ipv6=off;
+  ```
+  或使用 Pod 的 `/etc/resolv.conf` 中的 nameserver。
+
+---
+
+## 映像構建
+
+建議在 CI/CD pipeline 中注入版本資訊：
+
+```bash
+docker build \
+  --build-arg BUILD_COMMIT_TAG=$(git describe --tags --always) \
+  --build-arg BUILD_COMMIT_SHA=$(git rev-parse HEAD) \
+  -t your-registry.com/api-gateway:$(git describe --tags --always) \
+  .
+```
+
+> 目前 Dockerfile 尚未使用 `ARG` 接收這些值，環境變數由 K8s env 注入即可。如需 bake 進 image，可在 Dockerfile 加入 `ARG` 和 `ENV` 指令。

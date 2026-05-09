@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# 確保指令遇到錯誤時停止
+set -e
+
+if [ "$#" -ne 2 ]; then
+    echo "用法: $0 <專案名稱> <目標路徑>"
+    echo "範例: $0 MyGateway /path/to/my-gateway"
+    exit 1
+fi
+
+PROJECT_NAME=$1
+TARGET_DIR=$2
+
+# 驗證專案名稱只允許英數字、.、_、-
+if ! echo "$PROJECT_NAME" | grep -qE '^[A-Za-z0-9._-]+$'; then
+    echo "錯誤：專案名稱只允許英文字母、數字、.、_、- 組成。"
+    echo "請勿使用空格、斜線或特殊字元。"
+    exit 1
+fi
+
+# 將專案名稱轉為小寫做為 Docker Container 名稱使用
+PROJECT_NAME_LOWER=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
+
+# 取得腳本所在的目錄 (模板根目錄)
+TEMPLATE_DIR=$(cd "$(dirname "$0")" && pwd)
+
+if [ -d "$TARGET_DIR" ]; then
+    echo "錯誤：目標路徑 $TARGET_DIR 已存在，請指定一個新的空目錄。"
+    exit 1
+fi
+
+echo "開始建立新專案: $PROJECT_NAME 於 $TARGET_DIR ..."
+
+# 1. 複製檔案 (排除 .git 與本腳本)
+mkdir -p "$TARGET_DIR"
+rsync -av --exclude='.git' --exclude='create-project.sh' "$TEMPLATE_DIR/" "$TARGET_DIR/"
+
+# 2. 自動修改 docker-compose.yml
+COMPOSE_FILE="$TARGET_DIR/docker-compose.yml"
+if [ -f "$COMPOSE_FILE" ]; then
+    # 支援 macOS (BSD sed) 與 Linux (GNU sed)
+    if sed --version >/dev/null 2>&1; then
+        sed -i "s/image: openresty-template:local/image: ${PROJECT_NAME_LOWER}:local/g" "$COMPOSE_FILE"
+        sed -i "s/container_name: openresty-template/container_name: ${PROJECT_NAME_LOWER}/g" "$COMPOSE_FILE"
+    else
+        sed -i '' "s/image: openresty-template:local/image: ${PROJECT_NAME_LOWER}:local/g" "$COMPOSE_FILE"
+        sed -i '' "s/container_name: openresty-template/container_name: ${PROJECT_NAME_LOWER}/g" "$COMPOSE_FILE"
+    fi
+    echo "已更新 docker-compose.yml"
+fi
+
+# 3. 更新 .env.sample 的 SERVICE_NAME
+ENV_SAMPLE_FILE="$TARGET_DIR/.env.sample"
+if [ -f "$ENV_SAMPLE_FILE" ]; then
+    if sed --version >/dev/null 2>&1; then
+        sed -i "s/SERVICE_NAME=GatewayTemplate/SERVICE_NAME=${PROJECT_NAME}/g" "$ENV_SAMPLE_FILE"
+    else
+        sed -i '' "s/SERVICE_NAME=GatewayTemplate/SERVICE_NAME=${PROJECT_NAME}/g" "$ENV_SAMPLE_FILE"
+    fi
+    echo "已更新 .env.sample 的 SERVICE_NAME"
+fi
+
+# 4. 重新命名 VHost 檔案
+VHOST_FILE="$TARGET_DIR/vhost/default.vhost"
+if [ -f "$VHOST_FILE" ]; then
+    mv "$VHOST_FILE" "$TARGET_DIR/vhost/${PROJECT_NAME_LOWER}.vhost"
+    echo "已重命名 vhost 為 ${PROJECT_NAME_LOWER}.vhost"
+fi
+
+# 5. 初始化 Git
+echo "初始化 Git ..."
+cd "$TARGET_DIR"
+git init
+git add .
+git commit -m "feat: initial commit from OpenResty gateway template"
+
+echo "專案建立完成！"
+echo ""
+echo "下一步請執行："
+echo "  cd $TARGET_DIR"
+echo "  cp .env.sample .env"
+echo "  docker-compose up -d"
