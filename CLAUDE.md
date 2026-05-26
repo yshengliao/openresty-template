@@ -155,24 +155,58 @@ it becomes the error code; otherwise it wraps in `FAILURE`.
 
 ## Module Reference
 
-| Module | Require path | Purpose |
+> Canonical libraries list (with descriptions) is in [README.md → Included Libraries](README.md#included-libraries). The table below is the working reference Claude needs while writing endpoints — require paths + the most common entry points.
+
+| Module | Require path | Common usage |
 |---|---|---|
-| Response | `shared.api.response` | All HTTP responses |
-| Validation | `shared.api.httparg` | Input parsing and validation |
-| Error codes | `shared.api.def` | `def.ERROR_CODE.*` constants |
-| Utilities | `shared.api.util` | `coalesce`, `deep_clone`, `dump_table`, etc. |
+| Response | `shared.api.response` | `success`, `failure`, `error`, `print`, `html`, `redirect`, `redirect_error`, `on_exit` |
+| Validation | `shared.api.httparg` | `tag()` → `tag.json/query/form/header/part/text`; `assertion.*` |
+| Error codes | `shared.api.def` | `def.ERROR_CODE.*` constants (see list below) |
+| Utilities | `shared.api.util` | `coalesce`, `deep_clone`, `dump_table` |
 | Tracing helper | `shared.api.tracing-helper` | `event.add_event(span, name, attrs)` |
-| WebAPI client | `shared.api.webapi-client` | HTTP calls to upstream services (injects OTel headers) |
-| Low-level HTTP | `shared.http.client` | Raw HTTP with exponential retry |
-| Object mapper | `shared.object.mapper` | Declarative field projection |
-| JSON | `shared.json` | Deep JSON encode/decode with mapper |
-| Base64URL | `shared.base64url` | `encode(s)` / `decode(s)` |
-| JWT | `resty.jwt` | JWT sign / verify |
-| HMAC | `resty.hmac` | HMAC-SHA256 |
-| OTP | `resty.otp` | TOTP / HOTP |
-| MessagePack | `resty.msgpack` | MessagePack encode/decode |
-| Tarantool | `resty.tarantool` | Tarantool DB client |
-| Config | `config` | `config.ENV.*` — environment variables |
+| WebAPI client | `shared.api.webapi-client` | `new({host, timeout})` + `do_request` + `resolve_response` (injects OTel headers) |
+| Low-level HTTP | `shared.http.client` | `request({...})` — exponential retry built in |
+| Object mapper | `shared.object.mapper` | `map`, `path`, `StringMapper`, `ScalarMapper`, `ObjectMapper`, `ListMapper` |
+| JSON | `shared.json` | `encode`, `decode` (deep mapper aware) |
+| Base64URL | `shared.base64url` | `encode(s)`, `decode(s)` |
+| Config | `config` | `config.ENV.*` (env vars declared in `script/script.env.conf`) |
+| Third-party (resty/) | `resty.jwt`, `resty.hmac`, `resty.otp`, `resty.msgpack`, `resty.tarantool` | See README for descriptions |
+
+### `response.*` return shapes
+
+| Function | Status | Content-Type | Note |
+|---|---|---|---|
+| `response.success(tbl)` | 200 | `application/json` | Auto-appends `timestamp` |
+| `response.failure(code, msg)` | 400 | `application/json` | `code` from `def.ERROR_CODE.*` |
+| `response.error(err)` | 400 | `application/json` | Auto-classifies: `^[A-Z0-9_]+$` → code; else `FAILURE` |
+| `response.print(s)` | 200 | `text/plain` | Raw text body |
+| `response.html(s)` | 200 | `text/html` | Raw HTML body |
+| `response.redirect(url)` | 302 | — | `url` must be hardcoded |
+| `response.redirect_error(url, err)` | 302 | — | `url` asserted non-empty; err appended as query |
+| `response.on_exit(fn)` | — | — | LIFO cleanup hooks; run after the response |
+
+### Error codes (from `script/shared/api/def.lua`)
+
+`def.ERROR_CODE.*` — use these constants in `response.failure(code, msg)`:
+
+| Code | Typical use |
+|---|---|
+| `OK` | Internal positive sentinel (rarely returned from endpoint) |
+| `NOP` | No-op acknowledgement |
+| `UNSUPPORTED` | Feature / method not supported |
+| `NO_CONTENT` | Resource exists but empty |
+| `INVALID_OPERATION` | Operation not allowed in current state |
+| `UNKNOWN_FAILURE` | Generic unexpected failure |
+| `INVALID_ARGUMENT` | Bad input value or type |
+| `PERMISSION_DENIED` | Auth/authz failed |
+| `INVALID_TOKEN` | Token malformed / signature mismatch |
+| `TOKEN_EXPIRED` | Token past TTL |
+| `MISSING_PRINCIPAL` | Subject identifier absent |
+| `INVALID_PRINCIPAL` | Subject identifier malformed |
+| `INVALID_SIGNATURE` | HMAC / JWT signature mismatch |
+| `DUPLICATE_OPERATION` | Idempotency / replay detected |
+
+Need a new code? Add to `script/shared/api/def.lua` first; never invent freeform error strings.
 
 ### httparg input sources
 
@@ -328,15 +362,10 @@ Set `JaegerCollector_Host` and `JaegerCollector_OTLPHttpPort` in `.env`.
 
 ## Environment Variables
 
-| Variable | Default | Where used |
-|---|---|---|
-| `SERVICE_NAME` | `GatewayTemplate` | OTel trace resource name |
-| `BUILD_COMMIT_TAG` | — | `config.ENV.BUILD_COMMIT_TAG` |
-| `BUILD_COMMIT_SHA` | — | `config.ENV.BUILD_COMMIT_SHA` |
-| `JaegerCollector_Host` | `127.0.0.1` | `config.ENV.JAEGER_COLLECTOR` |
-| `JaegerCollector_OTLPHttpPort` | `4318` | `config.ENV.JAEGER_COLLECTOR` |
+Full list with defaults: [README.md → Configuration](README.md#configuration).
 
-Read via `require("config").ENV.*` — never call `os.getenv()` directly in endpoint files.
+Rule: always read via `require("config").ENV.*` — never call `os.getenv()` directly in endpoint files.
+To add a new variable: declare in `script/script.env.conf` (`env VAR_NAME;`) and expose in `script/config.lua`.
 
 ---
 

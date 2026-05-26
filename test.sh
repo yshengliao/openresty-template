@@ -119,6 +119,30 @@ check_status "X-Http-Method-Override 非法 → 405" "405" "$BASE_URL/api/v1/hel
 check_status "X-Http-Method 合法 override POST→GET → 200" "200" "$BASE_URL/api/v1/hello" \
     -X POST -H "X-Http-Method: GET"
 
+# ── API 驗證（httparg） ─────────────────────────────────
+echo ""
+echo "── API 驗證 ──"
+# GET /api/v1/example：query 驗證 + assertion.max CAP 行為
+check_status "GET /api/v1/example 無 query → 200"               "200" "$BASE_URL/api/v1/example"
+check_body   "GET /api/v1/example 含 items"                     "items" "$BASE_URL/api/v1/example"
+check_status "GET /api/v1/example?status=unknown → 400"         "400" "$BASE_URL/api/v1/example?status=unknown"
+check_status "GET /api/v1/example?limit=999 → 200（max 是 CAP）" "200" "$BASE_URL/api/v1/example?limit=999"
+check_body   "GET limit=999 response capped to 100"             '"limit":100' "$BASE_URL/api/v1/example?limit=999"
+
+# POST /api/v1/example：JSON body 驗證
+check_status "POST valid body → 200" "200" "$BASE_URL/api/v1/example" \
+    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":50}'
+check_body   "POST valid body 含 created" "created" "$BASE_URL/api/v1/example" \
+    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":50}'
+check_status "POST 缺 name → 400" "400" "$BASE_URL/api/v1/example" \
+    -X POST -H 'Content-Type: application/json' -d '{"amount":50}'
+check_status "POST amount=-1 → 400（non_negative_number）" "400" "$BASE_URL/api/v1/example" \
+    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":-1}'
+check_status "POST amount=abc → 400（type coercion）" "400" "$BASE_URL/api/v1/example" \
+    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":"abc"}'
+check_status "POST amount=99999 → 400（業務 guard >10000）" "400" "$BASE_URL/api/v1/example" \
+    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":99999}'
+
 # ── 安全 Headers ─────────────────────────────────────────
 echo ""
 echo "── 安全 Headers ──"

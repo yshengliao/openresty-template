@@ -7,6 +7,20 @@
 
 A minimal, Docker-first OpenResty + Lua API gateway template. Pre-configured with OpenTelemetry tracing support, a fluent request validation library, a unified JSON response layer, and a collection of general-purpose service libraries.
 
+## Quick Links
+
+| I want to... | Go here |
+|---|---|
+| Scaffold a new project | [Step 1 — Scaffold](#step-1--scaffold) |
+| Add an API endpoint | [Adding an Endpoint](#adding-an-endpoint) |
+| Route by subdomain or multi-tenant | [docs/routing.md](docs/routing.md) |
+| Use `response`, `httparg`, `mapper` modules | [docs/api-development.md](docs/api-development.md) |
+| Add a Lua library / FFI module / shared dict | [docs/plugin-development.md](docs/plugin-development.md) |
+| Understand OpenResty phases, cosocket, LuaJIT limits | [docs/lua-development.md](docs/lua-development.md) |
+| Deploy to Kubernetes | [docs/kubernetes-deployment.md](docs/kubernetes-deployment.md) |
+| Local / K8s config overrides | `conf/local/*.sample` |
+| Coding conventions for AI agents | [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md) |
+
 ## Features
 
 - **Modular VHost design** — each service gets its own `.vhost` file, auto-included by Nginx.

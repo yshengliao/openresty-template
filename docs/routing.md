@@ -45,9 +45,11 @@ location ~ ^/api/v1/([_\-a-zA-Z0-9/]+)$ {
 支援透過 header 覆蓋 HTTP Method：
 
 ```
-X-HTTP-Method: DELETE
-X-HTTP-Method-Override: PATCH
+X-Http-Method: DELETE
+X-Http-Method-Override: PATCH
 ```
+
+> Header 名稱大小寫不敏感，但本專案文件統一使用 `X-Http-Method` 形式（與 vhost 程式碼一致）。
 
 ---
 

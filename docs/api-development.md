@@ -1,19 +1,8 @@
 # API 開發指南
 
-本文件說明如何在此 OpenResty Gateway 模板上開發 API 端點。
+本文件說明如何在此 OpenResty Gateway 模板上開發 API 端點，著重 `response` / `httparg` / `webapi-client` / `mapper` 模組的實際用法。
 
----
-
-## 核心概念
-
-所有 API 端點都遵循 **file-based routing**：請求路徑與 HTTP Method 直接對應到 Lua 檔案位置。
-
-```
-請求:  GET /api/v1/user/profile
-檔案:  script/api/v1/user/profile/GET.lua
-```
-
-不需要在 Nginx 設定中手動註冊路由，VHost 已有通用的 location 規則自動映射。
+> 路由規則本身（file-based mapping、VHost 結構、多 subdomain）請見 [`docs/routing.md`](routing.md)。
 
 ---
 

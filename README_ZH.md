@@ -7,6 +7,20 @@
 
 一個極簡、以 Docker 為核心的 OpenResty + Lua API 閘道模板。內建 OpenTelemetry 追蹤支援、流暢的請求驗證函式庫、統一的 JSON 回應層，以及多種通用服務函式庫。
 
+## 快速導覽
+
+| 我想要... | 看這裡 |
+|---|---|
+| 建立新專案 | [第一步 — 建立新專案](#第一步--建立新專案) |
+| 新增 API 端點 | [新增 API 端點](#新增-api-端點) |
+| 依 subdomain 或多租戶派發路由 | [docs/routing.md](docs/routing.md) |
+| 使用 `response`、`httparg`、`mapper` 模組 | [docs/api-development.md](docs/api-development.md) |
+| 新增 Lua 函式庫 / FFI / shared dict | [docs/plugin-development.md](docs/plugin-development.md) |
+| 理解 OpenResty 階段、cosocket、LuaJIT 限制 | [docs/lua-development.md](docs/lua-development.md) |
+| 部署到 Kubernetes | [docs/kubernetes-deployment.md](docs/kubernetes-deployment.md) |
+| 本機 / K8s 設定覆寫 | `conf/local/*.sample` |
+| AI agent 撰寫慣例 | [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md) |
+
 ## 特色
 
 - **模組化 VHost 設計** — 每個服務擁有獨立的 `.vhost` 檔案，Nginx 自動載入。

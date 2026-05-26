@@ -6,44 +6,31 @@
 
 ## 環境變數
 
-### 必要環境變數
+完整環境變數清單請見 [README.md → Configuration](../README.md#configuration)（`SERVICE_NAME`、`BUILD_COMMIT_TAG`、`BUILD_COMMIT_SHA`、`JaegerCollector_Host`、`JaegerCollector_OTLPHttpPort`）。
 
-在 Kubernetes Deployment 中，需透過 `env` 或 `envFrom` 注入：
+### K8s 注入方式
 
-| 變數 | 說明 | 範例值 | 必要 |
-|---|---|---|---|
-| `SERVICE_NAME` | 服務名稱（OTel trace resource） | `MyGateway` | 建議 |
-| `BUILD_COMMIT_TAG` | Git tag / 版本標記 | `v1.2.0` | 建議 |
-| `BUILD_COMMIT_SHA` | Git commit SHA | `abc1234...` | 建議 |
-
-### 選用環境變數（OpenTelemetry）
-
-| 變數 | 說明 | 預設值 | 必要 |
-|---|---|---|---|
-| `JaegerCollector_Host` | Jaeger OTLP collector 位址 | `127.0.0.1` | 啟用追蹤時必填 |
-| `JaegerCollector_OTLPHttpPort` | Jaeger OTLP HTTP port | `4318` | 啟用追蹤時必填 |
+K8s Deployment 透過 `env` 或 `envFrom` 注入，下方「Deployment 範例」可直接複製。
 
 ### 自定義環境變數
 
-如需新增環境變數：
+K8s 與 Docker 共通流程，需三步：
 
 1. 在 `script/script.env.conf` 加入宣告：
    ```nginx
    env YOUR_NEW_VAR;
    ```
-
 2. 在 `script/config.lua` 的 `_M.ENV` table 讀取：
    ```lua
    YOUR_NEW_VAR = os.getenv("YOUR_NEW_VAR") or "default_value",
    ```
-
 3. 在 Lua 端點中使用：
    ```lua
    local config = require("config")
    local value  = config.ENV.YOUR_NEW_VAR
    ```
 
-> **注意**：OpenResty/Nginx 不會自動將容器環境變數傳入 Lua runtime，必須在 `script.env.conf` 以 `env VAR_NAME;` 明確宣告。
+> OpenResty/Nginx 不會自動將容器環境變數傳入 Lua runtime，必須在 `script.env.conf` 以 `env VAR_NAME;` 明確宣告。
 
 ---
 
@@ -164,14 +151,15 @@ envFrom:
 
 ---
 
-## 健康檢查說明
+## 健康檢查 → K8s Probe 對應
 
-模板內建兩個 health check 端點，均已關閉 access log：
+端點本身的行為（回應內容、access log 關閉等）見 [README.md → Health Check](../README.md#health-check)。
+K8s 建議對應：
 
-| 端點 | 回應 | 建議用途 |
-|---|---|---|
-| `/healthcheck` | `200 ok` | `livenessProbe` — 確認程序存活 |
-| `/ping` | `200 pong` | `readinessProbe` — 確認可接收流量 |
+| 端點 | K8s probe |
+|---|---|
+| `/healthcheck` | `livenessProbe` — 確認程序存活 |
+| `/ping` | `readinessProbe` — 確認可接收流量 |
 
 ---
 
