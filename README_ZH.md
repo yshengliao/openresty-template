@@ -26,7 +26,7 @@ openresty-template/
 │   ├── nginx.vhost.inc   # 自動載入 vhost/*.vhost
 │   └── local/            # 環境專屬覆寫設定（已 gitignore）
 │       └── nginx.http.resolver.inc.sample  # K8s DNS resolver 範例
-├── doc/                  # 開發文件
+├── docs/                  # 開發文件
 │   ├── api-development.md     # API 開發指南
 │   ├── routing.md             # 路由與 VHost 設定
 │   └── kubernetes-deployment.md # K8s 部署參考
@@ -91,8 +91,6 @@ docker compose restart
 
 不需要重新打包 Image。
 
-### 快速開始
-
 ### 新增 API 端點
 
 以新增 `GET /api/v1/hello` 為例：
@@ -113,7 +111,7 @@ docker compose restart
    ```
 3. 執行 `docker compose restart` 後即可測試。
 
-更多 API 開發細節請參閱 [API 開發指南](doc/api-development.md)。
+更多 API 開發細節請參閱 [API 開發指南](docs/api-development.md)。
 
 ### 健康檢查
 
@@ -174,9 +172,11 @@ bash test.sh http://staging.example.com
 
 | 文件 | 說明 |
 |---|---|
-| [API 開發指南](doc/api-development.md) | 端點建立、Response、httparg 驗證、HTTP Client、Object Mapper |
-| [路由與 VHost 設定](doc/routing.md) | File-based routing、VHost 結構、自定義路由、Proxy Pass |
-| [Kubernetes 部署參考](doc/kubernetes-deployment.md) | 環境變數、Deployment/Service/ConfigMap manifest、健康檢查 |
+| [API 開發指南](docs/api-development.md) | 端點建立、Response、httparg 驗證、HTTP Client、Object Mapper |
+| [路由與 VHost 設定](docs/routing.md) | File-based routing、VHost 結構、自定義路由、Proxy Pass |
+| [Kubernetes 部署參考](docs/kubernetes-deployment.md) | 環境變數、Deployment/Service/ConfigMap manifest、健康檢查 |
+| [插件與函式庫新增](docs/plugin-development.md) | 新增 Lua 函式庫、FFI 模組、共用記憶體 |
+| [Lua 開發指南](docs/lua-development.md) | OpenResty 執行階段、cosocket 規則、ngx.ctx、LuaJIT 限制、常見陷阱 |
 
 ## 授權條款
 

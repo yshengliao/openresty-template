@@ -88,8 +88,7 @@ server {
     more_clear_headers                 Server;
 
     root "";
-    set  $SCRIPT_DIR   "${realpath_root}/script";
-    set  $SERVICE_NAME "GatewayTemplate";
+    set  $SCRIPT_DIR  "${realpath_root}/script";
 
     # 預設 404
     location / {
@@ -123,8 +122,7 @@ server {
     more_clear_headers                 Server;
 
     root "";
-    set  $SCRIPT_DIR   "${realpath_root}/script";
-    set  $SERVICE_NAME "AdminService";
+    set  $SCRIPT_DIR  "${realpath_root}/script";
 
     location / {
         return 404;
@@ -208,7 +206,7 @@ conf/
 | `lua_code_cache` | nginx.conf | 預設 `on`，開發時改 `off` 可免 restart |
 | `lua_package_path` | script/script.conf | Lua 模組搜尋路徑 |
 | `lua_shared_dict` | script/script.conf | 跨 worker 共用記憶體宣告 |
-| `resolver` | nginx.conf | DNS resolver，預設 `8.8.8.8` |
+| `resolver` | nginx.conf | DNS resolver，預設 `127.0.0.11`（Docker 內建 DNS）；K8s 環境見 `conf/local/nginx.http.resolver.inc.sample` |
 | `server_tokens` | nginx.conf | 預設 `off`，隱藏 Nginx 版本號 |
 
 ### 開發模式

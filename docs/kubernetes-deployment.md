@@ -12,6 +12,7 @@
 
 | 變數 | 說明 | 範例值 | 必要 |
 |---|---|---|---|
+| `SERVICE_NAME` | 服務名稱（OTel trace resource） | `MyGateway` | 建議 |
 | `BUILD_COMMIT_TAG` | Git tag / 版本標記 | `v1.2.0` | 建議 |
 | `BUILD_COMMIT_SHA` | Git commit SHA | `abc1234...` | 建議 |
 
@@ -179,12 +180,14 @@ envFrom:
 - **Lua code cache**：生產環境務必保持 `lua_code_cache on`（預設值），否則每次請求都會重新載入 Lua 檔案。
 - **worker_processes**：Dockerfile 中預設為 `auto`，在 K8s 中會偵測 Pod 的 CPU limit。如需手動控制，可在 `nginx.conf` 指定。
 - **lua_shared_dict**：跨 worker 的共用記憶體，在 K8s 環境中僅限單一 Pod 內共用，不跨 Pod。如需跨 Pod 共用狀態，應使用外部儲存（Redis 等）。
-- **DNS resolver**：預設使用 `8.8.8.8`。在 K8s 叢集內應改為 CoreDNS：
+- **DNS resolver**：預設為 `127.0.0.11`（Docker 內建 DNS，適用一般 Docker 網路）。K8s 叢集內需改為 CoreDNS；複製 `conf/local/nginx.http.resolver.inc.sample` 並命名為 `conf/local/nginx.http.resolver.inc`，調整內容：
   ```nginx
-  # conf/nginx.conf
+  # conf/local/nginx.http.resolver.inc
   resolver  kube-dns.kube-system.svc.cluster.local  valid=30s ipv6=off;
+  # 或直接指定 CoreDNS cluster IP（通常為 10.96.0.10）：
+  # resolver  10.96.0.10  valid=30s ipv6=off;
   ```
-  或使用 Pod 的 `/etc/resolv.conf` 中的 nameserver。
+  此檔案已在 `.gitignore` 中排除，各環境個別設定，不進版本控制。
 
 ---
 

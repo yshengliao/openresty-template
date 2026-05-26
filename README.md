@@ -26,7 +26,7 @@ openresty-template/
 │   ├── nginx.vhost.inc   # Auto-includes vhost/*.vhost
 │   └── local/            # Environment-specific overrides (gitignored)
 │       └── nginx.http.resolver.inc.sample  # K8s DNS resolver example
-├── doc/                  # Documentation
+├── docs/                  # Documentation
 │   ├── api-development.md     # API development guide
 │   ├── routing.md             # Routing and VHost configuration
 │   └── kubernetes-deployment.md # K8s deployment reference
@@ -82,8 +82,6 @@ After scaffolding, make sure you have done the following before committing real 
 
 ### Development Workflow
 
-### Development Workflow
-
 All configuration and Lua scripts are volume-mounted into the container. To apply changes:
 
 ```bash
@@ -93,7 +91,7 @@ docker compose restart
 
 No image rebuild needed.
 
-### Quick Start
+### Adding an Endpoint
 
 To add `GET /api/v1/hello`:
 
@@ -113,7 +111,7 @@ To add `GET /api/v1/hello`:
    ```
 3. `docker compose restart` and test.
 
-See [API Development Guide](doc/api-development.md) for detailed usage of response, validation, and HTTP client modules.
+See [API Development Guide](docs/api-development.md) for detailed usage of response, validation, and HTTP client modules.
 
 ### Health Check
 
@@ -174,9 +172,11 @@ Environment variables are declared in `script/script.env.conf` and read in `scri
 
 | Document | Description |
 |---|---|
-| [API Development Guide](doc/api-development.md) | Endpoints, response, httparg validation, HTTP client, object mapper |
-| [Routing and VHost](doc/routing.md) | File-based routing, VHost structure, custom routes, proxy pass |
-| [Kubernetes Deployment](doc/kubernetes-deployment.md) | Env vars, Deployment/Service/ConfigMap manifests, health checks |
+| [API Development Guide](docs/api-development.md) | Endpoints, response, httparg validation, HTTP client, object mapper |
+| [Routing and VHost](docs/routing.md) | File-based routing, VHost structure, custom routes, proxy pass |
+| [Kubernetes Deployment](docs/kubernetes-deployment.md) | Env vars, Deployment/Service/ConfigMap manifests, health checks |
+| [Plugin Development](docs/plugin-development.md) | Adding Lua libraries, FFI modules, shared dict |
+| [Lua Development Guide](docs/lua-development.md) | OpenResty phases, cosocket rules, ngx.ctx, LuaJIT limits, pitfalls |
 
 ## Licence
 
