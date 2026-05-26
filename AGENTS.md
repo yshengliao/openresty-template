@@ -23,6 +23,8 @@ A **copy-once OpenResty + Lua API gateway template**. Do not develop business lo
 | Get oriented (file layout, commands, env vars) | [README.md](README.md) |
 | Add an endpoint, use `response` / `httparg` / `mapper` | [docs/api-development.md](docs/api-development.md) |
 | Route by subdomain or multi-tenant; add a vhost | [docs/routing.md](docs/routing.md) |
+| Proxy gRPC to an upstream service | [docs/grpc.md](docs/grpc.md) |
+| Run or proxy WebSocket | [docs/websocket.md](docs/websocket.md) |
 | Add a Lua library or FFI module | [docs/plugin-development.md](docs/plugin-development.md) |
 | Understand OpenResty phases, cosocket rules, LuaJIT limits | [docs/lua-development.md](docs/lua-development.md) |
 | Deploy to Kubernetes | [docs/kubernetes-deployment.md](docs/kubernetes-deployment.md) |

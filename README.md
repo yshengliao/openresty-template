@@ -14,6 +14,8 @@ A minimal, Docker-first OpenResty + Lua API gateway template. Pre-configured wit
 | Scaffold a new project | [Step 1 — Scaffold](#step-1--scaffold) |
 | Add an API endpoint | [Adding an Endpoint](#adding-an-endpoint) |
 | Route by subdomain or multi-tenant | [docs/routing.md](docs/routing.md) |
+| Proxy gRPC to an upstream service | [docs/grpc.md](docs/grpc.md) |
+| Run / proxy WebSocket | [docs/websocket.md](docs/websocket.md) |
 | Use `response`, `httparg`, `mapper` modules | [docs/api-development.md](docs/api-development.md) |
 | Add a Lua library / FFI module / shared dict | [docs/plugin-development.md](docs/plugin-development.md) |
 | Understand OpenResty phases, cosocket, LuaJIT limits | [docs/lua-development.md](docs/lua-development.md) |
@@ -189,6 +191,8 @@ Environment variables are declared in `script/script.env.conf` and read in `scri
 |---|---|
 | [API Development Guide](docs/api-development.md) | Endpoints, response, httparg validation, HTTP client, object mapper |
 | [Routing and VHost](docs/routing.md) | File-based routing, VHost structure, custom routes, proxy pass |
+| [gRPC Gateway](docs/grpc.md) | HTTP/2, `grpc_pass`, TLS, Lua auth before grpc_pass |
+| [WebSocket](docs/websocket.md) | Lua WS server + proxy patterns, frame types, common pitfalls |
 | [Kubernetes Deployment](docs/kubernetes-deployment.md) | Env vars, Deployment/Service/ConfigMap manifests, health checks |
 | [Plugin Development](docs/plugin-development.md) | Adding Lua libraries, FFI modules, shared dict |
 | [Lua Development Guide](docs/lua-development.md) | OpenResty phases, cosocket rules, ngx.ctx, LuaJIT limits, pitfalls |

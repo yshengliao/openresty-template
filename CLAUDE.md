@@ -393,6 +393,8 @@ When adding a new endpoint, add a corresponding test case in `test.sh`.
 |---|---|
 | [`docs/api-development.md`](docs/api-development.md) | Endpoints, response module, httparg, HTTP client, object mapper |
 | [`docs/routing.md`](docs/routing.md) | File-based routing, VHost structure, custom routes, proxy pass |
+| [`docs/grpc.md`](docs/grpc.md) | gRPC gateway: HTTP/2, `grpc_pass`, TLS, Lua auth |
+| [`docs/websocket.md`](docs/websocket.md) | WebSocket: Lua server + proxy patterns, frame types |
 | [`docs/kubernetes-deployment.md`](docs/kubernetes-deployment.md) | Env vars, Deployment/Service/ConfigMap manifests, health checks |
 | [`docs/plugin-development.md`](docs/plugin-development.md) | Adding Lua libraries, FFI modules, lua_shared_dict |
 | [`docs/lua-development.md`](docs/lua-development.md) | OpenResty phases, cosocket rules, ngx.ctx, LuaJIT limits, pitfalls |

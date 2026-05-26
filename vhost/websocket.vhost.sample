@@ -1,0 +1,63 @@
+# 範例：WebSocket — 同時示範兩種模式
+#   Pattern A: OpenResty 自己當 WS server（Lua 直接處理 frames）
+#   Pattern B: Proxy WS 到上游 server（gateway 不解 frames）
+#
+# Sources:
+#   - https://github.com/openresty/lua-resty-websocket
+#   - https://nginx.org/en/docs/http/websocket.html
+#
+# 啟用方式：
+#   1. mv vhost/websocket.vhost.sample vhost/websocket.vhost
+#   2. docker compose restart
+#
+# 測試 Pattern A（Lua echo server）：
+#   websocat ws://ws.example.com:8080/ws/echo                    # 需 /etc/hosts 對映
+#   # 或 curl 模擬 Upgrade：
+#   curl -sv -H "Host: ws.example.com" \
+#        -H "Upgrade: websocket" -H "Connection: Upgrade" \
+#        -H "Sec-WebSocket-Version: 13" \
+#        -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+#        http://localhost:8080/ws/echo
+#   # 預期：HTTP/1.1 101 Switching Protocols
+#
+# 注意：
+#   - map directive 必須在 http {} scope；本 sample 寫在 server 上方，nginx 會放對位置
+#   - Pattern B 需要 ws.example.com 對應的後端 ws server，否則回 502
+
+# 把 HTTP Upgrade header 對映成 nginx Connection header
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen       8080;
+    server_name  ws.example.com;
+
+    include 'snippets/server-defaults.inc';
+
+    root "";
+    set  $SCRIPT_DIR "${realpath_root}/script";
+
+    include 'snippets/server-health.inc';
+
+    # Pattern A — OpenResty 自己作 WebSocket server，Lua 直接讀寫 frames
+    location = /ws/echo {
+        lua_check_client_abort  on;     # client 斷線時觸發 ngx.on_abort（避免 zombie loop）
+        lua_socket_log_errors   off;    # 抑制預期的 timeout / closed 噪音（開發期建議 on）
+        content_by_lua_file     "$SCRIPT_DIR/api/v1/example/websocket-echo.lua";
+    }
+
+    # Pattern B — Proxy 到上游 WebSocket server（OpenResty 不解 frames）
+    location = /ws/proxy {
+        # 用變數延遲 DNS 到 request time（依賴 nginx.conf 的 resolver）
+        set $ws_upstream "backend:9000";                 # 改為你的 WS 上游
+        proxy_pass          http://$ws_upstream;
+        proxy_http_version  1.1;                         # WS handshake 必須 HTTP/1.1
+        proxy_set_header    Upgrade    $http_upgrade;
+        proxy_set_header    Connection $connection_upgrade;
+        proxy_set_header    Host       $host;
+        proxy_set_header    X-Real-IP  $remote_addr;
+        proxy_read_timeout  3600s;                       # 拉長避免閒置斷線（依需求調整）
+    }
+}

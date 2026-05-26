@@ -188,6 +188,15 @@ location /api/backend/ {
 }
 ```
 
+### 協定升級（gRPC / WebSocket）
+
+不同協定有專屬設定指南：
+
+- **gRPC**（HTTP/2 + `grpc_pass`） → [`docs/grpc.md`](grpc.md)
+- **WebSocket**（HTTP Upgrade，server / proxy 兩種模式） → [`docs/websocket.md`](websocket.md)
+
+兩者都有 `.vhost.sample` 可直接複製啟用。
+
 ---
 
 ## 多服務 / 多 Subdomain 路由

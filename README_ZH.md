@@ -14,6 +14,8 @@
 | 建立新專案 | [第一步 — 建立新專案](#第一步--建立新專案) |
 | 新增 API 端點 | [新增 API 端點](#新增-api-端點) |
 | 依 subdomain 或多租戶派發路由 | [docs/routing.md](docs/routing.md) |
+| 把 gRPC proxy 到上游服務 | [docs/grpc.md](docs/grpc.md) |
+| 提供 / 轉發 WebSocket | [docs/websocket.md](docs/websocket.md) |
 | 使用 `response`、`httparg`、`mapper` 模組 | [docs/api-development.md](docs/api-development.md) |
 | 新增 Lua 函式庫 / FFI / shared dict | [docs/plugin-development.md](docs/plugin-development.md) |
 | 理解 OpenResty 階段、cosocket、LuaJIT 限制 | [docs/lua-development.md](docs/lua-development.md) |
@@ -189,6 +191,8 @@ bash test.sh http://staging.example.com
 |---|---|
 | [API 開發指南](docs/api-development.md) | 端點建立、Response、httparg 驗證、HTTP Client、Object Mapper |
 | [路由與 VHost 設定](docs/routing.md) | File-based routing、VHost 結構、自定義路由、Proxy Pass |
+| [gRPC Gateway](docs/grpc.md) | HTTP/2、`grpc_pass`、TLS、Lua 認證 |
+| [WebSocket](docs/websocket.md) | Lua WS server + proxy 模式、frame 類型、常見坑 |
 | [Kubernetes 部署參考](docs/kubernetes-deployment.md) | 環境變數、Deployment/Service/ConfigMap manifest、健康檢查 |
 | [插件與函式庫新增](docs/plugin-development.md) | 新增 Lua 函式庫、FFI 模組、共用記憶體 |
 | [Lua 開發指南](docs/lua-development.md) | OpenResty 執行階段、cosocket 規則、ngx.ctx、LuaJIT 限制、常見陷阱 |

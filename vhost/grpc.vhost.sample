@@ -1,0 +1,49 @@
+# 範例：OpenResty 作 gRPC gateway，proxy 到上游 gRPC 服務
+#
+# Source: https://nginx.org/en/docs/http/ngx_http_grpc_module.html
+#
+# 啟用方式：
+#   1. mv vhost/grpc.vhost.sample vhost/grpc.vhost
+#   2. 在 docker-compose.yml 的 ports 區段加入：
+#        - "50051:50051"
+#   3. 把 grpc_pass 指向你的實際 gRPC 上游服務
+#   4. docker compose up -d
+#
+# 測試：
+#   grpcurl -plaintext -d '{}' localhost:50051 your.package.Service/Method
+#
+# 注意：
+#   - gRPC 強制使用 HTTP/2；缺 http2 指令會收到 HTTP/1.1 client（瀏覽器 / curl）也擋下
+#   - 不要對 gRPC body 用 body_filter_by_lua_*（binary length-prefixed framing）
+#   - 認證 / metadata 處理在 access_by_lua_block 內做最乾淨
+
+server {
+    listen       50051;
+    http2        on;                    # gRPC 強制需要 HTTP/2
+
+    more_clear_headers Server;
+
+    # 可選：在 grpc_pass 前做 metadata-based 認證
+    # access_by_lua_block {
+    #     local auth = ngx.var.http_authorization
+    #     if not auth or auth ~= "Bearer expected-token" then
+    #         ngx.status = ngx.HTTP_UNAUTHORIZED
+    #         return ngx.exit(ngx.HTTP_UNAUTHORIZED)
+    #     end
+    # }
+
+    location / {
+        # 用變數延遲 DNS 到 request time（依賴 nginx.conf 的 resolver；
+        # 否則上游不存在時，nginx 啟動會 fail-fast）
+        set $grpc_upstream "backend:50051";              # 改為你的 gRPC 上游
+        grpc_pass            grpc://$grpc_upstream;
+        grpc_set_header      X-Real-IP $remote_addr;
+        grpc_read_timeout    300s;
+        grpc_send_timeout    300s;
+
+        # 若上游使用 TLS，改用：
+        # grpc_pass          grpcs://$grpc_upstream;
+        # grpc_ssl_verify    on;
+        # grpc_ssl_trusted_certificate /path/to/ca.crt;
+    }
+}
