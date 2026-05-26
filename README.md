@@ -1,5 +1,10 @@
 # openresty-template
 
+[![OpenResty](https://img.shields.io/badge/openresty-1.27.1.2+-blue.svg)](https://openresty.org/)
+![Status](https://img.shields.io/badge/status-template-green.svg)
+[![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
+![AI Generated](https://img.shields.io/badge/AI_Generated-Claude_Code_Opus_4.7_Max-blueviolet.svg)
+
 > [Traditional Chinese](README_ZH.md)
 
 > **This is a project template.** Do not develop directly in this repository.
