@@ -10,6 +10,7 @@ A minimal, Docker-first OpenResty + Lua API gateway template. Pre-configured wit
 ## Features
 
 - **Modular VHost design** — each service gets its own `.vhost` file, auto-included by Nginx.
+- **Multi-subdomain / multi-tenant ready** — sample vhosts for per-subdomain services, wildcard tenant dispatch, and shared `conf/snippets/` for DRY config. See [docs/routing.md](docs/routing.md).
 - **File-based Lua routing** — requests are mapped to `script/api/v1/{path}/{METHOD}.lua` automatically.
 - **Method override with allowlist** — `X-Http-Method` / `X-Http-Method-Override` headers are supported, validated against `GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS` to prevent path traversal.
 - **OpenTelemetry tracing** — `server_tracing.lua` integrates with Jaeger via OTLP; enable/disable per vhost with a single comment toggle.

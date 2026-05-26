@@ -1,0 +1,54 @@
+# 範例：*.api.example.com → 同一套 API，依 subdomain 切租戶
+#
+# Pattern B：單 VHost + Wildcard subdomain（multi-tenant）
+#
+# 適用場景：所有租戶用同一套 API 邏輯，但資料、權限、計費依 subdomain 隔離。
+# 例：tenant1.api.example.com、tenant2.api.example.com 都打到同一程式碼，
+#     端點內讀 ngx.var.tenant 判斷該客戶身分。
+#
+# 啟用方式：
+#   1. mv vhost/multi-tenant.vhost.sample vhost/multi-tenant.vhost
+#   2. docker compose restart
+#
+# 本機測試：
+#   curl -H "Host: acme.api.example.com" http://localhost:8080/api/v1/hello
+#
+# Lua 中讀取：
+#   local tenant = ngx.var.tenant  -- "acme"
+#   if not tenant then
+#       return response.failure("INVALID_TENANT", "missing subdomain")
+#   end
+#
+# 注意：與 default.vhost 共用 port 8080。預設 server_name 為 localhost；
+#       未匹配 wildcard 的請求仍由 default.vhost 處理。
+
+server {
+    listen       8080;
+
+    # 命名 capture：(?<name>...) 結果可在後續 nginx 變數與 Lua 中以 $name / ngx.var.name 存取
+    server_name  ~^(?<tenant>[^.]+)\.api\.example\.com$;
+
+    include 'snippets/server-defaults.inc';
+
+    root "";
+    set  $SCRIPT_DIR "${realpath_root}/script";
+
+    include 'snippets/server-health.inc';
+
+    location ~ ^/api/v1/([_\-a-zA-Z0-9/]+)$ {
+        default_type 'application/json;charset=utf-8';
+
+        set $method $request_method;
+        if ($http_x_http_method) {
+            set $method  $http_x_http_method;
+        }
+        if ($http_x_http_method_override) {
+            set $method  $http_x_http_method_override;
+        }
+
+        include 'snippets/access-method-allowlist.inc';
+
+        # 共用 default.vhost 的端點程式碼；Lua 內透過 ngx.var.tenant 取得租戶 ID
+        content_by_lua_file "$SCRIPT_DIR/api/v1/$1/${method}.lua";
+    }
+}

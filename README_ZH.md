@@ -10,6 +10,7 @@
 ## 特色
 
 - **模組化 VHost 設計** — 每個服務擁有獨立的 `.vhost` 檔案，Nginx 自動載入。
+- **多 Subdomain / 多租戶就緒** — 內附 sample vhost 示範 per-subdomain 服務、wildcard 租戶派發，以及 `conf/snippets/` 共用區塊。詳見 [docs/routing.md](docs/routing.md)。
 - **檔案式 Lua 路由** — 請求會自動對應到 `script/api/v1/{路徑}/{HTTP方法}.lua`。
 - **Method override 安全白名單** — 支援 `X-Http-Method` / `X-Http-Method-Override`，僅允許 `GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS`，防止路徑穿越攻擊。
 - **OpenTelemetry 追蹤** — `server_tracing.lua` 透過 OTLP 整合 Jaeger；只要在 vhost 裡切換一行註解就能啟用或停用。

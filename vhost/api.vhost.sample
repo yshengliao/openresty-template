@@ -1,0 +1,45 @@
+# 範例：api.example.com → script/services/api/
+#
+# Pattern A：多 VHost 一服務一檔（同 port，依 subdomain 派發）
+#
+# 啟用方式：
+#   1. mv vhost/api.vhost.sample vhost/api.vhost
+#   2. 建立服務目錄與端點：
+#      mkdir -p script/services/api/v1/hello
+#      cp script/api/v1/hello/GET.lua script/services/api/v1/hello/GET.lua
+#   3. docker compose restart
+#
+# 本機測試（需透過 Host header 模擬）：
+#   curl -H "Host: api.example.com" http://localhost:8080/api/v1/hello
+#   # 或編輯 /etc/hosts：127.0.0.1 api.example.com
+#
+# 與 default.vhost 共用 port 8080。Nginx 依 Host header 自動派發到對應 server block。
+
+server {
+    listen       8080;
+    server_name  api.example.com;
+
+    include 'snippets/server-defaults.inc';
+
+    root "";
+    set  $SCRIPT_DIR "${realpath_root}/script/services/api";
+
+    include 'snippets/server-health.inc';
+
+    location ~ ^/api/v1/([_\-a-zA-Z0-9/]+)$ {
+        default_type 'application/json;charset=utf-8';
+
+        set $method $request_method;
+        if ($http_x_http_method) {
+            set $method  $http_x_http_method;
+        }
+        if ($http_x_http_method_override) {
+            set $method  $http_x_http_method_override;
+        }
+
+        include 'snippets/access-method-allowlist.inc';
+
+        # 路徑 $1 對應 script/services/api/v1/$1/{METHOD}.lua
+        content_by_lua_file "$SCRIPT_DIR/v1/$1/${method}.lua";
+    }
+}

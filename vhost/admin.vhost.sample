@@ -1,0 +1,53 @@
+# 範例：admin.example.com:9090 → script/services/admin/
+#
+# Pattern A：多 VHost 一服務一檔（獨立 port，物理隔離）
+#
+# Admin 介面常見需求：較嚴格的 body 限制、更嚴格的 CSP、獨立 port 方便防火牆規則。
+#
+# 啟用方式：
+#   1. mv vhost/admin.vhost.sample vhost/admin.vhost
+#   2. 在 docker-compose.yml 的 ports 區段加入：
+#        - "9090:9090"
+#   3. 建立服務目錄：
+#        mkdir -p script/services/admin/v1
+#   4. docker compose up -d
+#
+# 本機測試：
+#   curl -H "Host: admin.example.com" http://localhost:9090/admin/v1/<endpoint>
+
+server {
+    listen       9090;
+    server_name  admin.example.com;
+
+    # 比 default 更嚴格的 body 限制（admin 不該收大檔案）
+    client_max_body_size    1m;
+    client_body_buffer_size 256k;
+
+    # 自訂 headers（覆寫共用預設）
+    add_header X-Content-Type-Options  nosniff                          always;
+    add_header X-Frame-Options         DENY                             always;
+    add_header Referrer-Policy         no-referrer                      always;
+    add_header Content-Security-Policy "default-src 'none'"             always;
+    more_clear_headers                 Server;
+
+    root "";
+    set  $SCRIPT_DIR "${realpath_root}/script/services/admin";
+
+    include 'snippets/server-health.inc';
+
+    location ~ ^/admin/v1/([_\-a-zA-Z0-9/]+)$ {
+        default_type 'application/json;charset=utf-8';
+
+        set $method $request_method;
+        if ($http_x_http_method) {
+            set $method  $http_x_http_method;
+        }
+        if ($http_x_http_method_override) {
+            set $method  $http_x_http_method_override;
+        }
+
+        include 'snippets/access-method-allowlist.inc';
+
+        content_by_lua_file "$SCRIPT_DIR/v1/$1/${method}.lua";
+    }
+}
