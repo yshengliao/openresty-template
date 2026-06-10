@@ -1,0 +1,24 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# 開發期間停用 Lua 程式碼快取
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# 使用方式：
+#   cp conf/local/nginx.http.cache.inc.sample conf/local/nginx.http.cache.inc
+#
+# 說明：
+#   啟用此設定後，每次 HTTP 請求都會重新載入 .lua 檔案，
+#   修改 Lua 腳本無需執行 docker compose restart 即可立即生效。
+#
+#   ⚠️  僅限本機開發使用，正式環境絕對不可啟用，會嚴重影響效能。
+#
+# 重要：nginx 在同一 http {} context 內不允許出現兩個 lua_code_cache 指令。
+#   啟用此檔案前，請先將 conf/nginx.conf 第 37 行的預設設定行註解掉：
+#     # lua_code_cache  on;
+#   否則 nginx 會因重複指令而拒絕啟動。
+#
+#   此檔案（去掉 .sample 後綴）會被 nginx.conf 末端的 glob include 載入：
+#     include 'local/nginx.http*.inc';
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+lua_code_cache off;

@@ -6,8 +6,8 @@ server {
     # 共用 server 預設值（請求限制 + 安全 Headers）
     include 'snippets/server-defaults.inc';
 
-    root "";
-    set  $SCRIPT_DIR "${realpath_root}/script";
+    # Lua 腳本根目錄（容器內固定路徑，對應 Dockerfile 的 /app）
+    set $SCRIPT_DIR "/app/script";
 
     # 共用 health check 端點與預設 404
     include 'snippets/server-health.inc';
