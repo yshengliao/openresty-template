@@ -34,8 +34,15 @@ echo "開始建立新專案: $PROJECT_NAME 於 $TARGET_DIR ..."
 echo "  步驟：複製檔案、更新設定、複製 .env、更新 CLAUDE.md/AGENTS.md 標題、初始化 Git"
 
 # 1. 複製檔案 (排除 .git 與本腳本)
+# 優先使用 rsync；無 rsync 的環境（alpine、最小化 CI）改用 tar 複製
 mkdir -p "$TARGET_DIR"
-rsync -av --exclude='.git' --exclude='create-project.sh' "$TEMPLATE_DIR/" "$TARGET_DIR/"
+if command -v rsync >/dev/null 2>&1; then
+    rsync -av --exclude='.git' --exclude='create-project.sh' "$TEMPLATE_DIR/" "$TARGET_DIR/"
+else
+    echo "（未偵測到 rsync，改用 tar 複製）"
+    tar -C "$TEMPLATE_DIR" --exclude='.git' --exclude='create-project.sh' -cf - . \
+        | tar -C "$TARGET_DIR" -xf -
+fi
 
 # 2. 自動修改 docker-compose.yml
 COMPOSE_FILE="$TARGET_DIR/docker-compose.yml"
