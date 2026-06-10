@@ -7,7 +7,8 @@
 --
 -- Try:
 --   curl 'http://localhost:8080/api/v1/example?page=1&limit=10&status=active'
---   curl 'http://localhost:8080/api/v1/example?limit=999'   -- → 400 INVALID_ARGUMENT
+--   curl 'http://localhost:8080/api/v1/example?limit=999'   -- → 200, limit capped to 100
+--   curl 'http://localhost:8080/api/v1/example?status=unknown' -- → 400 INVALID_ARGUMENT
 --   curl 'http://localhost:8080/api/v1/example'             -- → 200 with defaults
 
 local response  = require("shared.api.response")

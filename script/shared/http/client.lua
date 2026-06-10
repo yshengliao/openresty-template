@@ -4,6 +4,7 @@ local bit   = require "bit"
 
 local ngx_re_match = ngx.re.match
 local bit_lshift   = bit.lshift
+local ngx_var      = ngx.var
 
 local _M = {}
 do
@@ -105,7 +106,7 @@ do
       return self._headers
     end
 
-    assert(type(value) == 'table', "headers must be a of type table")
+    assert(type(value) == 'table', "headers must be of type table")
     self._headers = value
     return self
   end
@@ -129,7 +130,7 @@ do
       return self
     end
 
-    assert(type(value) == 'string', "query must be a of type string")
+    assert(type(value) == 'string', "body must be of type string")
     self._body = value
     return self
   end
