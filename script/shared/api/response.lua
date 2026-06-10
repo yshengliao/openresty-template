@@ -23,7 +23,7 @@ do
 
 
   function _M.on_exit(proc)
-    assert("function"==type(proc))
+    assert(type(proc) == "function", "on_exit: proc must be a function")
 
     if not ngx.ctx._ngx_before_exit then
       ngx.ctx._ngx_before_exit = { proc }
@@ -51,10 +51,10 @@ do
     ngx.header.content_type = 'application/json; charset=utf-8'
 
     local body = cjson.encode({
-      message     = code,
-      description = message,
-      trace_id    = trace_id,
-      timestamp   = ngx.now() * 1000,
+      code      = code,
+      message   = message,
+      trace_id  = trace_id,
+      timestamp = ngx.now() * 1000,
     })
     ngx.ctx.response_body = body
     ngx.print(body)
@@ -73,7 +73,7 @@ do
       out.timestamp = ngx.now() * 1000
 
       if ngx.ctx.span  and  ngx.ctx.span.ctx  then
-        out._trace_id = ngx.ctx.span.ctx.trace_id
+        out.trace_id = ngx.ctx.span.ctx.trace_id
       end
 
       ngx.header.content_type = 'application/json; charset=utf-8'
@@ -92,6 +92,13 @@ do
 
   function _M.error(err)
     if "table" == type(err) then
+      -- Canonical error table shape: { code, message }.
+      if err.code ~= nil then
+        return _M.failure(err.code, err.message)
+      end
+      -- Legacy fallback: older upstream gateways produced { message = <code>,
+      -- description = <text> }, where the `message` field carried the error code.
+      -- Map that onto the new signature so transitional callers still work.
       return _M.failure(err.message, err.description)
     end
 

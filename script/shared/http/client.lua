@@ -12,6 +12,7 @@ do
 
   local DEFAULT_MAX_BACKOFF = 30000   --  30 seconds
   local DEFAULT_MIN_BACKOFF =   500   -- 500 milliseconds
+  local DEFAULT_TIMEOUT     =  5000   -- 5 seconds (socket timeout when caller omits one)
   local MAX_RETRIES         =     1   -- 最多重試 1 次（共 2 次嘗試）
 
   local function _retry_backoff(retry, minBackoff, maxBackoff)
@@ -140,7 +141,9 @@ do
       return nil, ("invalid operation: invalid uri")
     end
 
-    local backoff = timeout or DEFAULT_MIN_BACKOFF
+    -- Caller-supplied `timeout` is the per-attempt SOCKET timeout, NOT a backoff
+    -- seed. Backoff between retries is derived independently from DEFAULT_MIN_BACKOFF.
+    local sock_timeout = timeout or DEFAULT_TIMEOUT
 
     method  = string.upper(method)
 
@@ -172,7 +175,6 @@ do
     local attempt = 0
     local res
     repeat
-      timeout = _retry_backoff(attempt, backoff, DEFAULT_MAX_BACKOFF)
       res, err = http.request(
         host, port,
         {
@@ -182,7 +184,7 @@ do
           headers = headers,
           query   = query,
           body    = self._body,
-          timeout = timeout
+          timeout = sock_timeout
         }
       )
       -- check the response
@@ -194,18 +196,14 @@ do
             return nil, err
           end
         end
-        -- 重試前等待退避時間
+        -- 重試前等待退避時間（與 socket timeout 無關，採指數退避）
         if attempt <= MAX_RETRIES then
-          ngx.sleep(timeout / 1000)
+          ngx.sleep(_retry_backoff(attempt, DEFAULT_MIN_BACKOFF, DEFAULT_MAX_BACKOFF) / 1000)
         end
       else
         break
       end
     until attempt > MAX_RETRIES
-
-    -- if res and res.status and res.status >= 400 then
-    --   return nil, res
-    -- end
 
     if type(callback) == 'function' then
       return callback(res)

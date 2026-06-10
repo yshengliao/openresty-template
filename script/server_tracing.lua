@@ -10,7 +10,7 @@ local propagator               = require("opentelemetry.trace.propagation.text_m
 
 local _M = {}
 do
-  function _init()
+  local function _init()
     local tracer_provider      = require("opentelemetry.trace.tracer_provider")
     local batch_span_processor = require("opentelemetry.trace.batch_span_processor")
     local otlp_exporter        = require("opentelemetry.trace.exporter.otlp")
@@ -37,6 +37,25 @@ do
     end
   end
 
+  -- Redact sensitive header values before they are recorded as a span
+  -- attribute. The raw header text is captured for debugging, but credentials
+  -- (Authorization / Cookie / etc.) must never reach the trace backend.
+  local REDACTED_HEADERS = {
+    ["authorization"]       = true,
+    ["cookie"]              = true,
+    ["set-cookie"]          = true,
+    ["proxy-authorization"] = true,
+  }
+  local function _redact_raw_header(raw)
+    return (string.gsub(raw, "([^\r\n]+)", function(line)
+      local name, sep = string.match(line, "^([^:]+)(:)")
+      if name and REDACTED_HEADERS[string.lower(name)] then
+        return name .. sep .. " [REDACTED]"
+      end
+      return line
+    end))
+  end
+
   function _M.start()
     local tp = global.get_tracer_provider()
     if not tp then
@@ -60,7 +79,7 @@ do
       {
         kind = span_kind.server,
         attributes = {
-          attr.string("request", ngx.req.raw_header()..body)
+          attr.string("request", _redact_raw_header(ngx.req.raw_header())..body)
         },
       })
     context:attach()

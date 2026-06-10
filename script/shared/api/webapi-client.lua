@@ -23,31 +23,61 @@ do
 
   --[[
     opts {
-      error_response_handler
-      raw
+      error_response_handler   -- optional fn(resp); when set it is invoked on any
+                               --   non-2xx response and resolve_response returns nil
+      raw                      -- when true, return the decoded body string as-is
+      passthrough              -- when true, proxy the upstream status/headers/body
+                               --   verbatim on non-2xx then ngx.exit(ngx.OK)
     }
+
+    On a non-2xx response (and without passthrough / error_response_handler) this
+    returns `nil, err` where err is a unified table:
+      {
+        status  = <upstream status>,
+        code    = <upstream JSON .code (or legacy .message) | "UPSTREAM_ERROR">,
+        message = <upstream JSON message | short generic string>,
+        body    = <raw decoded body string>,
+      }
+    The table is shaped so `response.error(err)` (which reads only code/message)
+    produces a sane client response without leaking the raw upstream body.
   ]]
   local function _resolve_response(resp, opts)
     opts = opts or {}
 
-    if resp.status ~= 200 then
-      if resp.status == 400 then
-        if contenthelper.match_content_type(resp, 'application/json')  then
-          local content = contenthelper.decode(resp.headers, resp.body)
-          local err     = cjson.decode(content)
-          return nil, err
-        end
+    -- Treat any 2xx as success.
+    if resp.status < 200 or resp.status >= 300 then
+      -- Opt-in legacy behavior: proxy the upstream response verbatim.
+      if opts.passthrough then
+        ngx.status = resp.status
+        _fill_response_header(resp.headers)
+        ngx.say(resp.body)
+        ngx.exit(ngx.OK)
       end
 
       if type(opts.error_response_handler) == "function" then
         opts.error_response_handler(resp)
-        return
+        return nil
       end
 
-      ngx.status = resp.status
-      _fill_response_header(resp.headers)
-      ngx.say(resp.body)
-      ngx.exit(ngx.OK)
+      -- Build a unified error table from the upstream response.
+      local content = contenthelper.decode(resp.headers, resp.body)
+      local code, message
+      if contenthelper.match_content_type(resp, 'application/json') then
+        local parsed = cjson.decode(content)
+        if type(parsed) == "table" then
+          -- Canonical upstream shape uses `.code`; legacy gateways put the code
+          -- in `.message`. Prefer code, then fall back to the legacy field.
+          code    = parsed.code or parsed.message
+          message = parsed.message
+        end
+      end
+
+      return nil, {
+        status  = resp.status,
+        code    = code or "UPSTREAM_ERROR",
+        message = message or "upstream request failed",
+        body    = content,
+      }
     end
 
     local content = contenthelper.decode(resp.headers, resp.body)
@@ -73,11 +103,10 @@ do
       :send(method, timeout, nil)
 
     if err or (not resp) then
-
+      -- No handler: surface the transport error to the caller instead of
+      -- writing it into the response (which would leak transport details).
       if type(error_handler) ~= "function" then
-        ngx.status = 500
-        ngx.say(err)
-        ngx.exit(ngx.OK)
+        return nil, err or "no content"
       end
 
       if err then
