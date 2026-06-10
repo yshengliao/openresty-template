@@ -175,7 +175,7 @@ K8s 建議對應：
   # 或直接指定 CoreDNS cluster IP（通常為 10.96.0.10）：
   # resolver  10.96.0.10  valid=30s ipv6=off;
   ```
-  此檔案已在 `.gitignore` 中排除，各環境個別設定，不進版本控制。
+  **重要**：啟用此檔案前，請先將 `conf/nginx.conf` 第 33 行的預設 resolver 指令改為註解（`# resolver 127.0.0.11 ...`），否則 nginx 因同一 `http {}` context 有重複 `resolver` 指令而拒絕啟動。此檔案已在 `.gitignore` 中排除，各環境個別設定，不進版本控制。
 
 ---
 

@@ -16,6 +16,7 @@
 # Lua 中讀取：
 #   local tenant = ngx.var.tenant  -- "acme"
 #   if not tenant then
+#       -- INVALID_TENANT 為自訂錯誤碼，使用前請先加入 script/shared/api/def.lua
 #       return response.failure("INVALID_TENANT", "missing subdomain")
 #   end
 #

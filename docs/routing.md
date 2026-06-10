@@ -27,8 +27,9 @@ location ~ ^/api/v1/([_\-a-zA-Z0-9/]+)$ {
 
 ### URL 規則
 
-- 路徑僅允許 `a-z A-Z 0-9 _ - /`
-- Method 對應：`GET.lua`, `POST.lua`, `PUT.lua`, `PATCH.lua`, `DELETE.lua`
+- 路徑僅允許 `a-z A-Z 0-9 _ - /`（注意：數字路徑段也合法，如 `/order/123`；請見下方路由範例說明）
+- Method 對應：`GET.lua`, `POST.lua`, `PUT.lua`, `PATCH.lua`, `DELETE.lua`, `HEAD.lua`, `OPTIONS.lua`
+- `HEAD` 與 `OPTIONS` 已在 method 白名單中通過，但實際路由需要對應的 `HEAD.lua` / `OPTIONS.lua` 檔案存在；不存在時 Nginx 回傳 500
 - 不存在的路徑或 Method 會回傳 Nginx 預設的 404/500
 
 ### 路由範例
@@ -38,7 +39,7 @@ location ~ ^/api/v1/([_\-a-zA-Z0-9/]+)$ {
 | `GET /api/v1/hello` | `script/api/v1/hello/GET.lua` |
 | `POST /api/v1/user` | `script/api/v1/user/POST.lua` |
 | `GET /api/v1/user/profile` | `script/api/v1/user/profile/GET.lua` |
-| `DELETE /api/v1/order/123` | ❌ 不支援（含數字路徑需另設 location） |
+| `DELETE /api/v1/order/123` | `script/api/v1/order/123/DELETE.lua`（路徑 regex `[_\-a-zA-Z0-9/]+` 包含數字，請求會命中 location；但因為該 Lua 檔案不存在，Nginx 回傳 500。如需動態 ID 路由，請另設專屬 location） |
 
 ### HTTP Method Override
 
@@ -155,6 +156,8 @@ location = /api/v1/webhook/stripe {
 }
 ```
 
+> **WebSocket 例外**：`script/api/v1/example/websocket-echo.lua` 是 file-based routing 的明確例外。它不是 `METHOD.lua` 格式，而是由 `vhost/websocket.vhost.sample` 直接用 `content_by_lua_file` 指向。只有在 websocket.vhost 啟用時才能存取，且 `resty.websocket.*` 已內建於 OpenResty 映像，無需另行安裝。
+
 ### 帶 ID 參數的路由
 
 file-based routing 的正規表達式不允許純數字路徑段。如需 `/api/v1/user/{id}`：
@@ -259,9 +262,12 @@ curl -H "Host: customer-x.api.example.com" http://localhost:8080/api/v1/hello
 **Lua 端點範例：**
 ```lua
 local response = require("shared.api.response")
+local def      = require("shared.api.def")
 
 local tenant = ngx.var.tenant
 if not tenant or tenant == "" then
+    -- 注意：INVALID_TENANT 未在 def.lua 定義；若需要此錯誤碼，
+    -- 請先加入 script/shared/api/def.lua，再用 def.ERROR_CODE.INVALID_TENANT
     return response.failure("INVALID_TENANT", "missing subdomain")
 end
 
@@ -360,7 +366,11 @@ conf/
 ├── nginx.conf          # 主設定（worker_processes、gzip、resolver 等）
 ├── nginx.main.inc      # 引入 script/script.env.conf（env 變數宣告）
 ├── nginx.vhost.inc     # 引入 script/script.conf 和 vhost/*.vhost
-└── mime.types          # MIME 型別
+├── mime.types          # MIME 型別
+├── snippets/           # 共用 nginx 區塊（server-defaults、health、method allowlist）
+└── local/              # 本地覆寫（已 gitignore）
+    ├── nginx.http.cache.inc.sample     # 停用 lua_code_cache（開發用）
+    └── nginx.http.resolver.inc.sample  # K8s CoreDNS resolver 覆寫
 ```
 
 ### 重要設定項
@@ -368,7 +378,7 @@ conf/
 | 設定 | 位置 | 說明 |
 |---|---|---|
 | `worker_processes` | nginx.conf | 預設 `auto`，自動偵測 CPU 核心數 |
-| `lua_code_cache` | nginx.conf | 預設 `on`，開發時改 `off` 可免 restart |
+| `lua_code_cache` | nginx.conf | 預設 `on`；開發時透過 `conf/local/nginx.http.cache.inc.sample` 覆寫為 `off`（需先將 nginx.conf 預設行改為註解） |
 | `lua_package_path` | script/script.conf | Lua 模組搜尋路徑 |
 | `lua_shared_dict` | script/script.conf | 跨 worker 共用記憶體宣告 |
 | `resolver` | nginx.conf | DNS resolver，預設 `127.0.0.11`（Docker 內建 DNS）；K8s 環境見 `conf/local/nginx.http.resolver.inc.sample` |
@@ -376,21 +386,28 @@ conf/
 
 ### 開發模式
 
-關閉 Lua code cache 可以即時看到 Lua 修改（不需 restart），但效能會大幅下降：
+關閉 Lua code cache 可以即時看到 Lua 修改（不需 restart），但效能會大幅下降。使用預備好的 sample 啟用：
 
-```nginx
-# conf/nginx.conf
-lua_code_cache  off;  # 僅限開發環境
+```bash
+cp conf/local/nginx.http.cache.inc.sample conf/local/nginx.http.cache.inc
+# 同時在 conf/nginx.conf 第 37 行把 lua_code_cache on; 改為註解
+# 否則 nginx 會因同一 http {} context 有重複指令而拒絕啟動
 ```
 
 ### 本地設定覆蓋
 
-`conf/local/` 目錄可放置本地開發的額外設定：
+`conf/local/` 目錄可放置本地開發或部署環境的額外設定（已 gitignore）：
 
 ```nginx
-# conf/nginx.conf 的最後一行會載入
+# conf/nginx.conf 末端會載入
 include  'local/nginx.http*.inc';
 ```
+
+**內建 sample：**
+- `conf/local/nginx.http.cache.inc.sample` — 停用 Lua code cache（開發用）
+- `conf/local/nginx.http.resolver.inc.sample` — K8s CoreDNS resolver 覆寫
+
+啟用任一 sample：複製並去掉 `.sample` 後綴，再將 `conf/nginx.conf` 中對應的預設指令（`resolver` 或 `lua_code_cache`）改為註解，避免重複指令錯誤。
 
 使用方式：建立 `conf/local/nginx.http.dev.inc`，內容例如：
 
@@ -400,5 +417,3 @@ upstream dev_backend {
     server host.docker.internal:3000;
 }
 ```
-
-此目錄已在 `.gitignore` 中排除。

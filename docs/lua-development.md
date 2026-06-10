@@ -72,16 +72,14 @@ OpenResty 的 cosocket 讓 Lua 可以用同步語法進行非阻塞網路呼叫�
 
 不可在 `init_by_lua*` 或 `log_by_lua*` 中直接使用 cosocket（`log_by_lua` 可用 `ngx.timer` 包裝）。
 
-本模板的 `shared/http/client.lua` 封裝了 cosocket HTTP 呼叫：
+本模板的 `shared/http/client.lua` 封裝了 cosocket HTTP 呼叫（builder 模式）：
 ```lua
-local client = require("shared.http.client")
-local resp, err = client.request({
-    method  = "GET",
-    host    = "backend-service",
-    port    = 8080,
-    path    = "/internal/status",
-    timeout = 3000,
-})
+local httpclient = require("shared.http.client")
+local resp, err = httpclient.new()
+    :uri("http://backend-service:8080/internal/status")
+    :headers({ ["Authorization"] = "Bearer xxx" })
+    :send("GET", 3000)
+-- timeout 是每次嘗試的 socket timeout（毫秒）；逾時時最多重試一次（指數退避）
 ```
 
 ---
@@ -126,13 +124,16 @@ OpenResty 使用 LuaJIT 2.1（Lua 5.1 相容）：
 OpenResty Lua 中的錯誤處理模式：
 
 ```lua
+local response = require("shared.api.response")
+local def      = require("shared.api.def")
+
 -- 使用 pcall 捕捉執行期錯誤
 local ok, err = pcall(function()
     -- 可能出錯的程式碼
 end)
 if not ok then
     ngx.log(ngx.ERR, "unexpected error: ", err)
-    return response.failure("INTERNAL_ERROR", "服務暫時無法使用")
+    return response.failure(def.ERROR_CODE.UNKNOWN_FAILURE, "服務暫時無法使用")
 end
 ```
 
@@ -168,7 +169,7 @@ ngx.log(ngx.CRIT,   "critical error")
 
 ## httparg 驗證模組
 
-`shared/httparg.lua` 提供流暢式請求驗證：
+`shared.api.httparg`（端點入口，自動接線 `response.failure` 作為 error handler）提供流暢式請求驗證。請勿直接 require `shared.httparg`（raw engine），否則驗證失敗會被靜默吞掉而非回傳 HTTP 400。
 
 ```lua
 local httparg   = require("shared.api.httparg")
@@ -202,15 +203,17 @@ end
 
 ```lua
 local response = require("shared.api.response")
+local def      = require("shared.api.def")
 
-response.success({ data = result })         -- 200 JSON
-response.failure("INVALID_ARGUMENT", "說明") -- 400 JSON
-response.error(err)                          -- 從 upstream 錯誤直接轉發
-response.text("plain text")                  -- 200 plain text
-response.redirect("/new-path")               -- 302
+response.success({ data = result })                            -- 200 JSON (table: auto-appends timestamp)
+response.success("plain text")                                 -- 200 text/plain (string: no timestamp)
+response.failure(def.ERROR_CODE.INVALID_ARGUMENT, "說明")      -- 400 JSON
+response.error(err)                                            -- 從 upstream 錯誤直接轉發
+response.print("plain text")                                   -- 200 text/plain (explicit)
+response.redirect("/new-path")                                 -- 302
 ```
 
-每個函式都呼叫 `ngx.exit()`，之後的程式碼不會執行。
+每個函式都呼叫 `ngx.exit()`，之後的程式碼不會執行。注意：`response.text()` 不存在，請用 `response.print()`。
 
 ---
 
