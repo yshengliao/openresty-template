@@ -105,18 +105,22 @@ if [ -f "$VHOST_FILE" ]; then
     echo "已重命名 vhost 為 ${PROJECT_NAME_LOWER}.vhost"
 fi
 
-# 5. 初始化 Git
-echo "初始化 Git ..."
-cd "$TARGET_DIR"
-git init
-git add .
-if ! git commit -m "feat: initial commit from OpenResty gateway template"; then
-    echo ""
-    echo "⚠️  警告：Git 初始 commit 失敗（可能尚未設定 user.name / user.email）。"
-    echo "   Repository 已初始化，請手動執行："
-    echo "     git config user.name '你的名字'"
-    echo "     git config user.email 'you@example.com'"
-    echo "     git commit -m 'feat: initial commit from OpenResty gateway template'"
+# 5. 初始化 Git（無 git 指令的環境跳過，不中斷建立流程）
+if command -v git >/dev/null 2>&1; then
+    echo "初始化 Git ..."
+    cd "$TARGET_DIR"
+    git init
+    git add .
+    if ! git commit -m "feat: initial commit from OpenResty gateway template"; then
+        echo ""
+        echo "⚠️  警告：Git 初始 commit 失敗（可能尚未設定 user.name / user.email）。"
+        echo "   Repository 已初始化，請手動執行："
+        echo "     git config user.name '你的名字'"
+        echo "     git config user.email 'you@example.com'"
+        echo "     git commit -m 'feat: initial commit from OpenResty gateway template'"
+    fi
+else
+    echo "⚠️  警告：未偵測到 git 指令，跳過 Git 儲存庫初始化。"
 fi
 
 echo "專案建立完成！"

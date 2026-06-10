@@ -60,9 +60,11 @@ do
       end
 
       -- Build a unified error table from the upstream response.
+      -- `content` may be nil/empty (204, empty body, corrupted gzip).
       local content = contenthelper.decode(resp.headers, resp.body)
       local code, message
-      if contenthelper.match_content_type(resp, 'application/json') then
+      if content and content ~= ""
+         and contenthelper.match_content_type(resp, 'application/json') then
         local parsed = cjson.decode(content)
         if type(parsed) == "table" then
           -- Canonical upstream shape uses `.code`; legacy gateways put the code
@@ -83,6 +85,10 @@ do
     local content = contenthelper.decode(resp.headers, resp.body)
     if opts.raw then
       return content
+    end
+    if content == nil or content == "" then
+      -- Empty 2xx body (e.g. 204): nothing to decode, not an error.
+      return nil
     end
     return cjson.decode(content)
   end

@@ -47,6 +47,9 @@ do
     ["proxy-authorization"] = true,
   }
   local function _redact_raw_header(raw)
+    if not raw then
+      return ""
+    end
     return (string.gsub(raw, "([^\r\n]+)", function(line)
       local name, sep = string.match(line, "^([^:]+)(:)")
       if name and REDACTED_HEADERS[string.lower(name)] then

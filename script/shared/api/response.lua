@@ -98,8 +98,16 @@ do
       end
       -- Legacy fallback: older upstream gateways produced { message = <code>,
       -- description = <text> }, where the `message` field carried the error code.
-      -- Map that onto the new signature so transitional callers still work.
-      return _M.failure(err.message, err.description)
+      -- Only treat `message` as a code when it actually looks like one;
+      -- otherwise ({ message = "connection timeout" }) it is the human text.
+      if type(err.message) == "string" then
+        local m, _ = ngx.re.match(err.message, "^[A-Z0-9_]+$", "oj")
+        if m and next(m) then
+          return _M.failure(err.message, err.description)
+        end
+        return _M.failure(ERROR_CODE.FAILURE, err.message)
+      end
+      return _M.failure(ERROR_CODE.FAILURE, err.description)
     end
 
     local err_code = ERROR_CODE.FAILURE
