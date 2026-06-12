@@ -1,5 +1,3 @@
-local cjson  = require "cjson.safe"
-
 local ngx  = _G.ngx
 
 
@@ -13,10 +11,14 @@ local ContentDecoders = {
     decode = function(data)
       local zlib = require("zlib")
       local stream = zlib.inflate()
-      -- FIXME should return r
-      local r = stream(data)
-
-      return cjson.decode(r)
+      -- A corrupted/truncated gzip payload makes the stream call throw;
+      -- degrade to nil instead of crashing the request with a 500.
+      local ok, r = pcall(stream, data)
+      if not ok then
+        ngx.log(ngx.ERR, "failed to decompress gzip data: ", tostring(r))
+        return nil
+      end
+      return r  -- return inflated string; caller is responsible for JSON decoding
     end
   }
 }

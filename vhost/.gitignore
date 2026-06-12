@@ -2,5 +2,3 @@
 
 mock*.vhost
 mock*.vhost.default
-
-!default/*

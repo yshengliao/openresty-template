@@ -1,0 +1,27 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# K8s DNS resolver 覆寫範例
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# 使用方式：
+#   cp conf/local/nginx.http.resolver.inc.sample conf/local/nginx.http.resolver.inc
+#
+# 說明：
+#   conf/nginx.conf 的 http {} 區塊預設載入 Docker 內建 DNS（127.0.0.11）：
+#     resolver 127.0.0.11 valid=30s ipv6=off;
+#
+#   在 Kubernetes 叢集內，127.0.0.11 不存在，需改為 CoreDNS 位址。
+#   此檔案（去掉 .sample 後綴）會被 nginx.conf 末端的 glob include 載入：
+#     include 'local/nginx.http*.inc';
+#
+# 重要：nginx 在同一 http {} context 內不允許出現兩個 resolver 指令。
+#   啟用此檔案前，請先將 conf/nginx.conf 第 33 行的預設 resolver 行註解掉：
+#     # resolver  127.0.0.11  valid=30s ipv6=off;
+#   否則 nginx 會因重複指令而拒絕啟動。
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+# 使用 K8s CoreDNS service FQDN（推薦，不依賴固定 IP）：
+resolver kube-dns.kube-system.svc.cluster.local valid=30s ipv6=off;
+
+# 或直接指定 CoreDNS cluster IP（通常為 10.96.0.10，依叢集設定而異）：
+# resolver 10.96.0.10 valid=30s ipv6=off;

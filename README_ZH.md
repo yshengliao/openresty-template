@@ -30,7 +30,7 @@
 - **檔案式 Lua 路由** — 請求會自動對應到 `script/api/v1/{路徑}/{HTTP方法}.lua`。
 - **Method override 安全白名單** — 支援 `X-Http-Method` / `X-Http-Method-Override`，僅允許 `GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS`，防止路徑穿越攻擊。
 - **OpenTelemetry 追蹤** — `server_tracing.lua` 透過 OTLP 整合 Jaeger；只要在 vhost 裡切換一行註解就能啟用或停用。
-- **流暢的請求驗證** — `shared/httparg.lua` 提供型別轉換、斷言驗證與 multipart 解析，開箱即用。
+- **流暢的請求驗證** — `shared.api.httparg` 提供型別轉換、斷言驗證與 multipart 解析；自動接線 `response.failure`，驗證失敗直接回傳 HTTP 400。
 - **通用服務函式庫** — JWT、HMAC、OTP（TOTP/HOTP）、MessagePack、Tarantool client、Base64URL 等，內建於 `script/resty/`。
 - **Docker 優先的開發流程** — `docker-compose.yml` 已掛載所有 Volume，在本機編輯 Lua 後只要 `docker compose restart` 就能套用。
 
@@ -42,7 +42,8 @@ openresty-template/
 │   ├── nginx.conf        # 主進入點
 │   ├── nginx.vhost.inc   # 自動載入 vhost/*.vhost
 │   └── local/            # 環境專屬覆寫設定（已 gitignore）
-│       └── nginx.http.resolver.inc.sample  # K8s DNS resolver 範例
+│       ├── nginx.http.cache.inc.sample     # lua_code_cache off（開發用）
+│       └── nginx.http.resolver.inc.sample  # K8s CoreDNS resolver 範例
 ├── docs/                  # 開發文件
 │   ├── api-development.md     # API 開發指南
 │   ├── routing.md             # 路由與 VHost 設定
@@ -72,19 +73,31 @@ openresty-template/
 這個腳本會自動：
 1. 將模板複製到目標路徑（排除 `.git` 與 `create-project.sh`）。
 2. 替換 `docker-compose.yml` 的 `image` 與 `container_name`。
-3. 在 `.env.sample` 設定 `SERVICE_NAME`。
-4. 將 `default.vhost` 重新命名為 `{專案名稱}.vhost`。
-5. 初始化全新的 Git 儲存庫並建立初始 commit。
+3. 在 `.env.sample` 設定 `SERVICE_NAME`，並自動複製為 `.env`。
+4. 更新 `CLAUDE.md` 與 `AGENTS.md` 第一行標題以反映專案名稱。
+5. 將 `default.vhost` 重新命名為 `{專案名稱}.vhost`。
+6. 初始化全新的 Git 儲存庫並建立初始 commit（若 git 身分未設定則警告而非中止）。
 
 ### 第二步 — 初始設定
 
+**使用 `create-project.sh` 建立的專案**（建議方式）：`.env` 已自動建立。只需：
 ```bash
 cd /path/to/my-gateway
-cp .env.sample .env        # 複製環境設定
-# 編輯 .env，設定 SERVICE_NAME、JaegerCollector_Host 等
-docker compose up -d
+# 如需調整，編輯 .env（SERVICE_NAME 已預設，確認 JaegerCollector_Host 等）
+docker compose up --build -d
 bash test.sh               # 確認一切正常
 ```
+
+**直接 clone 模板**（未使用 `create-project.sh`）：
+```bash
+cd /path/to/my-gateway
+cp .env.sample .env        # 手動複製環境設定
+# 編輯 .env，設定 SERVICE_NAME、JaegerCollector_Host 等
+docker compose up --build -d
+bash test.sh               # 確認一切正常
+```
+
+> 即使沒有 `.env` 也能正常啟動 — `docker-compose.yml` 設定了 `env_file.required: false`，且 `config.lua` 對所有變數都有預設值。
 
 ### 第三步 — 客製化確認清單
 
@@ -95,7 +108,7 @@ bash test.sh               # 確認一切正常
 - [ ] **`docker-compose.yml`** — 確認 `image` 與 `container_name` 已更新
 - [ ] **`CLAUDE.md`** — 更新標題行，改為你的專案名稱
 - [ ] **`README.md`** — 以你的專案文件取代此檔案
-- [ ] **`script/api/v1/example/`** — 刪除範例端點（僅供參考用）
+- [ ] **`script/api/v1/example/`** — 刪除範例端點（僅供參考用）。**例外**：若啟用 `vhost/websocket.vhost.sample`，請保留 `websocket-echo.lua`。
 
 ### 開發流程
 
@@ -144,6 +157,8 @@ bash test.sh                              # 預設：http://localhost:8080
 bash test.sh http://staging.example.com
 ```
 
+`test.sh` 分為兩個區段：**模板煙霧測試**（健康檢查、method 白名單、安全 Headers — 永遠執行）與 **example 端點測試**（偵測到 `script/api/v1/example/` 已刪除時自動跳過）。
+
 ## 內建函式庫
 
 | 函式庫 | 用途 |
@@ -151,8 +166,8 @@ bash test.sh http://staging.example.com
 | `shared/api/response.lua` | 統一的 JSON / 純文字 / HTML / 導向回應 |
 | `shared/api/webapi-client.lua` | HTTP Client，帶 OTel context propagation |
 | `shared/api/tracing-helper.lua` | OTel span event 輔助工具 |
-| `shared/httparg.lua` | 流暢的 request body / query / multipart 驗證 |
-| `shared/http/client.lua` | 底層 HTTP Client，含 retry backoff |
+| `shared/api/httparg.lua` | 流暢的請求驗證入口（自動接線 `response.failure`；`shared/httparg.lua` 為 raw engine，請勿直接 require） |
+| `shared/http/client.lua` | 底層 HTTP Client builder（`:uri():headers():query():body():send()`）；單次 timeout-only 重試含指數退避 |
 | `shared/object/mapper.lua` | 宣告式物件映射 / 投影 |
 | `shared/json.lua` | JSON encoder / decoder，支援 deep mapper |
 | `shared/base64url.lua` | Base64URL 編解碼 |
@@ -162,6 +177,7 @@ bash test.sh http://staging.example.com
 | `resty/msgpack.lua` | MessagePack 編解碼 |
 | `resty/tarantool.lua` | Tarantool 資料庫 client |
 | `resty/lib/opentelemetry/` | 完整的 OpenTelemetry Lua SDK |
+| `resty.websocket`（內建） | WebSocket server 與 client — 來自 OpenResty 基礎映像，無需另行安裝 |
 
 ## 設定
 
@@ -183,7 +199,7 @@ bash test.sh http://staging.example.com
 | DNS resolver | 預設使用 `127.0.0.11`（Docker 內建 DNS）。K8s 環境請複製 `conf/local/nginx.http.resolver.inc.sample` 並設定 cluster DNS。 |
 | 容器使用者 | 以 `nobody`（非 root）執行。Port 8080 不需要特權。 |
 | Server header | 所有回應皆透過 `more_clear_headers Server` 移除。 |
-| Trace 資料 | OTel span 設計上包含完整 request header 與 body（B2B 內部除錯用途）。請確保 Jaeger 存取受到妥善管控。 |
+| Trace 資料 | OTel span 記錄完整 request line、所有 header 與 body。`Authorization`、`Cookie`、`Set-Cookie`、`Proxy-Authorization` 的 header 值自動遮蔽為 `[REDACTED]`，其餘值與完整 body 以明文儲存（B2B 內部除錯用途）。請確保 Jaeger 存取受到妥善管控。 |
 
 ## 文件
 

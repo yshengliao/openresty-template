@@ -58,9 +58,9 @@ local HANDLER = {
       end
 
       local date = os.time({
-        year  = m[1],
-        month = m[2],
-        day   = m[3],
+        year  = tonumber(m[1]),
+        month = tonumber(m[2]),
+        day   = tonumber(m[3]),
       })
 
       if type(date) ~= "number" then
@@ -101,12 +101,12 @@ local HANDLER = {
       end
 
       local datetime = os.time({
-        year  = m[1],
-        month = m[2],
-        day   = m[3],
-        hour  = m[4],
-        min   = m[5],
-        sec   = m[6],
+        year  = tonumber(m[1]),
+        month = tonumber(m[2]),
+        day   = tonumber(m[3]),
+        hour  = tonumber(m[4]),
+        min   = tonumber(m[5]),
+        sec   = tonumber(m[6]),
       })
 
       if type(datetime) ~= "number" then
@@ -332,7 +332,7 @@ do
         if not result then
           return nil, {
             code    = ERROR_CODE.INVALID_ARGUMENT,
-            message = "specified argument '%s' value '"..input.."' out of range"
+            message = "specified argument '%s' value '"..tostring(input).."' out of range"
           }
         end
       end

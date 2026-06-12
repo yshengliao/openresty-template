@@ -16,6 +16,7 @@
 # Lua 中讀取：
 #   local tenant = ngx.var.tenant  -- "acme"
 #   if not tenant then
+#       -- INVALID_TENANT 為自訂錯誤碼，使用前請先加入 script/shared/api/def.lua
 #       return response.failure("INVALID_TENANT", "missing subdomain")
 #   end
 #
@@ -30,8 +31,8 @@ server {
 
     include 'snippets/server-defaults.inc';
 
-    root "";
-    set  $SCRIPT_DIR "${realpath_root}/script";
+    # Lua 腳本根目錄（容器內固定路徑，對應 Dockerfile 的 /app）
+    set $SCRIPT_DIR "/app/script";
 
     include 'snippets/server-health.inc';
 

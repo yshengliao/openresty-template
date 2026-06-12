@@ -171,6 +171,10 @@ wb:close()
 範例設定：[`vhost/websocket.vhost.sample`](../vhost/websocket.vhost.sample)
 範例 Lua endpoint：[`script/api/v1/example/websocket-echo.lua`](../script/api/v1/example/websocket-echo.lua)
 
+> **注意**：`websocket-echo.lua` 是 file-based routing 的**例外**。它不是 `METHOD.lua` 格式的檔案，而是由 `vhost/websocket.vhost.sample` 的 `content_by_lua_file` 明確指向它。如果你啟用了此 vhost sample，清理專案時請保留此檔案（不要在「刪除 example 端點」步驟時一起刪掉）。
+>
+> `resty.websocket.server` 與 `resty.websocket.client` 來自 OpenResty 基礎映像，已內建，無需另外安裝。
+
 ```bash
 mv vhost/websocket.vhost.sample vhost/websocket.vhost
 docker compose restart

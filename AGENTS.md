@@ -36,9 +36,9 @@ A **copy-once OpenResty + Lua API gateway template**. Do not develop business lo
 
 | Topic | Constraint |
 |---|---|
-| Method allowlist | `vhost/default.vhost` validates HTTP method against `GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS`. Invalid → 405. Do not widen. |
+| Method allowlist | `conf/snippets/access-method-allowlist.inc` validates HTTP method (case-insensitive, normalised to uppercase) against `GET\|POST\|PUT\|PATCH\|DELETE\|HEAD\|OPTIONS`. Invalid → 405 `{"code":"UNSUPPORTED","message":"Method not allowed"}`. Do not widen. |
 | TLS cert validation | `lua_ssl_trusted_certificate` is intentionally off. Traffic arrives via CDN (Cloudflare / CloudFront); enabling it creates friction without security gain. |
-| OTel span body capture | Full request headers and body land in spans by design — B2B internal debugging. Jaeger access is restricted infra-side. Do not add filtering unless explicitly asked. |
+| OTel span body capture | Full request line, headers, and body land in spans. `Authorization`/`Cookie`/`Set-Cookie`/`Proxy-Authorization` header values are auto-redacted to `[REDACTED]`. All other values captured verbatim — B2B internal debugging. Jaeger access is restricted infra-side. Do not add further filtering unless explicitly asked. |
 | `create-project.sh` input | `PROJECT_NAME` validated against `[A-Za-z0-9._-]+`. Do not relax. |
 
 ---
@@ -47,13 +47,13 @@ A **copy-once OpenResty + Lua API gateway template**. Do not develop business lo
 
 After `create-project.sh`, before writing business logic:
 
-- [ ] `.env` — set `SERVICE_NAME`
+- [ ] `.env` — already created automatically; verify `SERVICE_NAME` and set `JaegerCollector_Host` if using tracing
 - [ ] `vhost/{name}.vhost` — verify `listen` port
-- [ ] `docker-compose.yml` — verify `image` and `container_name`
-- [ ] `CLAUDE.md` line 1 — update title to reflect project name
-- [ ] `AGENTS.md` line 1 — update title to reflect project name
+- [ ] `docker-compose.yml` — verify `image` and `container_name` (auto-updated by script)
+- [ ] `CLAUDE.md` line 1 — already updated by script; confirm it shows your project name
+- [ ] `AGENTS.md` line 1 — already updated by script; confirm it shows your project name
 - [ ] `README.md` — replace with project-specific docs
-- [ ] `script/api/v1/example/` — delete (reference only)
+- [ ] `script/api/v1/example/` — delete (reference only); keep `websocket-echo.lua` if using the WebSocket vhost sample
 
 ---
 
@@ -62,4 +62,5 @@ After `create-project.sh`, before writing business logic:
 ```bash
 docker compose restart    # apply Lua / config / vhost edits (no rebuild)
 bash test.sh              # integration tests — expect all green
+# test.sh smoke tests always run; example-endpoint tests auto-skip if example/ is deleted
 ```

@@ -33,11 +33,17 @@ while true do
     end
 
     if not data then
-        -- 非 fatal：通常是 read timeout。主動送 ping 維持連線。
-        local _, ping_err = wb:send_ping()
-        if ping_err then
-            ngx.log(ngx.ERR, "ws: send_ping failed: ", ping_err)
-            break
+        -- Non-fatal: check whether this is a read timeout before sending keepalive.
+        if recv_err and string.find(recv_err, "timeout", 1, true) then
+            -- Timeout: send a ping to keep the connection alive.
+            local _, ping_err = wb:send_ping()
+            if ping_err then
+                ngx.log(ngx.ERR, "ws: send_ping failed: ", ping_err)
+                break
+            end
+        else
+            -- Other non-fatal error: log and continue.
+            ngx.log(ngx.WARN, "ws: recv_frame error: ", recv_err)
         end
 
     elseif typ == "close" then

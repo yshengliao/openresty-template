@@ -118,6 +118,7 @@ response.success({
 
 See `script/api/v1/example/GET.lua` and `script/api/v1/example/POST.lua` for canonical examples.
 These files are **reference only** — delete them before shipping business logic.
+**Exception**: if you activate the WebSocket vhost sample, keep `script/api/v1/example/websocket-echo.lua` — it is explicitly wired by `vhost/websocket.vhost.sample` and is NOT discovered by file-based routing.
 
 The general shape:
 
@@ -145,7 +146,7 @@ response.success({ items = results, page = page })
 |---|---|
 | Bad input (wrong type, missing required field) | `response.failure(def.ERROR_CODE.INVALID_ARGUMENT, "detail")` |
 | Auth failure | `response.failure(def.ERROR_CODE.PERMISSION_DENIED)` |
-| Upstream call failed | `response.error(err)` — err may be string or `{message, description}` table |
+| Upstream call failed | `response.error(err)` — err may be string or `{code, message}` table (canonical); legacy `{message=<code>, description=<text>}` also accepted |
 | Route redirect needed | `response.redirect("/target/path")` — url must be hardcoded, never user-controlled |
 
 `response.error(err)` auto-classifies: if `err` is an all-caps string matching `^[A-Z0-9_]+$`,
@@ -160,12 +161,12 @@ it becomes the error code; otherwise it wraps in `FAILURE`.
 | Module | Require path | Common usage |
 |---|---|---|
 | Response | `shared.api.response` | `success`, `failure`, `error`, `print`, `html`, `redirect`, `redirect_error`, `on_exit` |
-| Validation | `shared.api.httparg` | `tag()` → `tag.json/query/form/header/part/text`; `assertion.*` |
+| Validation | `shared.api.httparg` | `tag()` → `tag.json/query/form/header/part/text`; `assertion.*` — **always use this wrapper** (wires `response.failure` as error handler); `shared.httparg` is the raw engine — do not require it directly |
 | Error codes | `shared.api.def` | `def.ERROR_CODE.*` constants (see list below) |
 | Utilities | `shared.api.util` | `coalesce`, `deep_clone`, `dump_table` |
-| Tracing helper | `shared.api.tracing-helper` | `event.add_event(span, name, attrs)` |
-| WebAPI client | `shared.api.webapi-client` | `new({host, timeout})` + `do_request` + `resolve_response` (injects OTel headers) |
-| Low-level HTTP | `shared.http.client` | `request({...})` — exponential retry built in |
+| Tracing helper | `shared.api.tracing-helper` | `tracing.event.new(span)` → `ev:add_event(name, attrs)` |
+| WebAPI client | `shared.api.webapi-client` | `new({host, timeout})` + `do_request` + `resolve_response` (injects OTel headers when tracing active) |
+| Low-level HTTP | `shared.http.client` | builder: `:uri():headers():query():body():send(method, timeout)` — single timeout-only retry with exponential backoff |
 | Object mapper | `shared.object.mapper` | `map`, `path`, `StringMapper`, `ScalarMapper`, `ObjectMapper`, `ListMapper` |
 | JSON | `shared.json` | `encode`, `decode` (deep mapper aware) |
 | Base64URL | `shared.base64url` | `encode(s)`, `decode(s)` |
@@ -176,14 +177,25 @@ it becomes the error code; otherwise it wraps in `FAILURE`.
 
 | Function | Status | Content-Type | Note |
 |---|---|---|---|
-| `response.success(tbl)` | 200 | `application/json` | Auto-appends `timestamp` |
-| `response.failure(code, msg)` | 400 | `application/json` | `code` from `def.ERROR_CODE.*` |
-| `response.error(err)` | 400 | `application/json` | Auto-classifies: `^[A-Z0-9_]+$` → code; else `FAILURE` |
+| `response.success(tbl)` | 200 | `application/json` | Auto-appends `timestamp` + `trace_id` (when tracing active) |
+| `response.success(str)` | 200 | `text/plain` | String arg: raw body, NO `timestamp` appended |
+| `response.failure(code, msg)` | 400 | `application/json` | Body: `{code, message, trace_id, timestamp}`; `code` from `def.ERROR_CODE.*` |
+| `response.error(err)` | 400 | `application/json` | String matching `^[A-Z0-9_]+$` → used as code; other string → `FAILURE` with string as message; table `{code, message}` or legacy `{message=<code>, description=<text>}` |
 | `response.print(s)` | 200 | `text/plain` | Raw text body |
 | `response.html(s)` | 200 | `text/html` | Raw HTML body |
 | `response.redirect(url)` | 302 | — | `url` must be hardcoded |
 | `response.redirect_error(url, err)` | 302 | — | `url` asserted non-empty; err appended as query |
 | `response.on_exit(fn)` | — | — | LIFO cleanup hooks; run after the response |
+
+**Response body shapes:**
+```json
+// success
+{ "data": ..., "timestamp": 1718000000000, "trace_id": "abc..." }
+
+// failure / error
+{ "code": "INVALID_ARGUMENT", "message": "detail text", "trace_id": "abc...", "timestamp": 1718000000000 }
+// trace_id is omitted when tracing is not active
+```
 
 ### Error codes (from `script/shared/api/def.lua`)
 
@@ -199,6 +211,7 @@ it becomes the error code; otherwise it wraps in `FAILURE`.
 | `UNKNOWN_FAILURE` | Generic unexpected failure |
 | `INVALID_ARGUMENT` | Bad input value or type |
 | `PERMISSION_DENIED` | Auth/authz failed |
+| `UPSTREAM_ERROR` | Upstream returned non-2xx that couldn't be classified |
 | `INVALID_TOKEN` | Token malformed / signature mismatch |
 | `TOKEN_EXPIRED` | Token past TTL |
 | `MISSING_PRINCIPAL` | Subject identifier absent |
@@ -228,9 +241,9 @@ tag.text(...)                -- raw body text
 | `"required"` | Fail if nil |
 | `"string"` | Coerce to string |
 | `"number"` | Coerce to number |
-| `"boolean"` | Accept `true/false/yes/no/1/0` |
-| `"date"` | Parse `YYYY-MM-DD` → timestamp |
-| `"datetime"` | Parse `YYYY-MM-DD HH:MM:SS` → timestamp |
+| `"boolean"` | `false` ⟺ string `"false"`/`"no"`/`"off"` (any case) or number `0`; any other non-nil → `true`; note: string `"0"` → `true`; nil → `false` |
+| `"date"` | Parse `YYYY-M-D` (1–2 digit month/day accepted) → Unix timestamp in server's local timezone |
+| `"datetime"` | Parse `YYYY-M-D H:MM:SS` → Unix timestamp in server's local timezone |
 | `"json"` | Decode JSON string |
 | `"array"` | Validate as array table |
 | `"map"` | Validate as non-array table |
@@ -252,22 +265,33 @@ assertion.non_empty_array()              -- ERROR (400) if array is empty
 ### webapi-client pattern
 
 ```lua
-local webapi = require("shared.api.webapi-client")
+local webapi   = require("shared.api.webapi-client")
+local response = require("shared.api.response")
 
 local client = webapi.new({ host = "http://upstream:8080", timeout = 5000 })
 
-local resp = client:do_request({
+-- do_request returns resp or nil, err on transport failure
+local resp, err = client:do_request({
     method  = "POST",
     path    = "/v1/resource",
     body    = { key = "value" },    -- auto-JSON-encoded
     headers = { ["X-Internal"] = "1" },
 })
+if not resp then return response.error(err) end
 
-local result, err = webapi.resolve_response(resp)
-if err then return response.error(err) end
+-- resolve_response: any 2xx → result; any non-2xx → nil, {status,code,message,body}
+local result, rerr = webapi.resolve_response(resp)
+if rerr then return response.error(rerr) end
 
 response.success(result)
 ```
+
+`opts` table (second arg to `resolve_response`):
+- `opts.passthrough = true` — proxy upstream status/headers/body verbatim (legacy opt-in)
+- `opts.raw` — return undecoded body string instead of decoded table
+- `opts.error_response_handler` — `fn(resp)` called on non-2xx instead of returning `nil, err`
+
+OTel headers are injected only when `ngx.ctx.span` is set (i.e., tracing is active).
 
 ### object mapper pattern
 
@@ -275,10 +299,13 @@ response.success(result)
 local mapper = require("shared.object.mapper")
 
 local struct = {
-    id    = "user_id",                       -- field rename
-    email = mapper.path("contact", "email"), -- nested field
-    name  = mapper.StringMapper("raw_name"), -- force string
-    items = mapper.ListMapper("rows", {      -- list projection
+    id      = "user_id",                              -- field rename
+    email   = mapper.path("contact", "email"),        -- nested field
+    name    = mapper.StringMapper("raw_name"),         -- force string
+    contact = mapper.ObjectMapper("raw_contact", {    -- nested object
+        email = "email_addr",
+    }),
+    items   = mapper.ListMapper("rows", {             -- list projection
         sku   = "product_code",
         price = "unit_price",
     }),
@@ -327,7 +354,7 @@ local out = mapper.map(source_table, struct)
 - Don't hardcode secrets or config — use `.env` and `config.ENV.*`
 - Don't mutate the `result` table passed to `response.success()` after the call
 - Don't use `io`, `os.execute`, `dofile`, or `loadfile` — they are unsafe in LuaJIT/OpenResty context
-- Don't restart the container on every test — use `lua_code_cache off` in `local/nginx.http.cache.inc` during active development
+- Don't restart the container on every test — copy `conf/local/nginx.http.cache.inc.sample` → `conf/local/nginx.http.cache.inc` (comment out `lua_code_cache on` in `conf/nginx.conf` line 37 first to avoid duplicate-directive error)
 
 ---
 
@@ -342,21 +369,26 @@ local out = mapper.map(source_table, struct)
 
 ## Enabling OpenTelemetry Tracing
 
-In `vhost/default.vhost`, the `access_by_lua_block` already contains the tracing call — just uncomment:
+The tracing start toggle lives in `conf/snippets/access-method-allowlist.inc` — uncomment the last line:
 
 ```nginx
 access_by_lua_block {
     local allowed = {GET=1,POST=1,PUT=1,PATCH=1,DELETE=1,HEAD=1,OPTIONS=1}
-    if not allowed[ngx.var.method] then
-        ...
+    local m = string.upper(ngx.var.method or "")
+    if not allowed[m] then ...
     end
-    require("server_tracing").start()  -- uncomment this line
+    ngx.var.method = m
+    -- require("server_tracing").start()  ← uncomment this line
 }
 ```
 
-And uncomment the `body_filter_by_lua_block` block below `content_by_lua_file`.
+Because every location that includes this snippet shares the toggle, enabling it enables tracing for ALL locations that include `snippets/access-method-allowlist.inc`.
+
+For the flush (response recording), uncomment the `body_filter_by_lua_block` block in each vhost file (e.g., `vhost/default.vhost` ~line 33).
 
 Set `JaegerCollector_Host` and `JaegerCollector_OTLPHttpPort` in `.env`.
+
+> **PII note**: `server_tracing` captures the full request line, all headers, and body into the span `request` attribute. `Authorization`, `Cookie`, `Set-Cookie`, and `Proxy-Authorization` header **values** are redacted to `[REDACTED]` before recording. All other header values and the full body are captured verbatim — ensure Jaeger access is restricted accordingly.
 
 ---
 
@@ -371,8 +403,8 @@ To add a new variable: declare in `script/script.env.conf` (`env VAR_NAME;`) and
 
 ## DNS Resolver
 
-Default: `127.0.0.11` (Docker built-in).
-For Kubernetes: copy `conf/local/nginx.http.resolver.inc.sample` → `conf/local/nginx.http.resolver.inc` and set cluster DNS.
+Default: `127.0.0.11` (Docker built-in), set in `conf/nginx.conf` line 33.
+For Kubernetes: copy `conf/local/nginx.http.resolver.inc.sample` → `conf/local/nginx.http.resolver.inc` and set cluster DNS. **Important**: first comment out the default `resolver` line in `conf/nginx.conf` (line 33) — nginx rejects duplicate `resolver` directives in the same `http {}` context.
 
 ---
 
@@ -383,7 +415,18 @@ bash test.sh              # runs against http://localhost:8080
 bash test.sh http://host  # custom base URL
 ```
 
-When adding a new endpoint, add a corresponding test case in `test.sh`.
+`test.sh` is split into two sections:
+1. **Template smoke tests** — health checks, method allowlist, security headers. These always run and must not be broken.
+2. **Example-endpoint tests** — tests for `script/api/v1/example/`. These auto-skip when the example directory has been deleted (detected by a 404 probe).
+
+When adding a new endpoint, add a corresponding test case in `test.sh` using the real helpers:
+
+```bash
+check_status "GET /api/v1/foo → 200" "200" "$BASE_URL/api/v1/foo"
+check_body   "foo contains items"    "items" "$BASE_URL/api/v1/foo"
+```
+
+Available helpers: `check_status`, `check_body`, `check_no_header`, `check_header`.
 
 ---
 

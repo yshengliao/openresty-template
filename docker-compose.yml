@@ -11,8 +11,10 @@ services:
       - ./conf:/app/conf
       - ./vhost:/app/vhost
       - ./script:/app/script
+    # config.lua 對每個環境變數均有預設值，.env 不存在時仍可正常啟動
     env_file:
-      - .env
+      - path: .env
+        required: false
     stop_signal: SIGQUIT
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthcheck"]

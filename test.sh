@@ -92,6 +92,10 @@ echo " BASE_URL: $BASE_URL"
 echo "======================================"
 echo ""
 
+# ══════════════════════════════════════════════════════════════
+# 模板煙霧測試（與 example endpoint 無關，不應因刪除 example 而失敗）
+# ══════════════════════════════════════════════════════════════
+
 # ── 基本端點 ──────────────────────────────────────────────
 echo "── 基本端點 ──"
 check_status "GET /healthcheck → 200"  "200" "$BASE_URL/healthcheck"
@@ -100,7 +104,7 @@ check_status "GET /ping → 200"         "200" "$BASE_URL/ping"
 check_body   "GET /ping body = 'pong'" "pong" "$BASE_URL/ping"
 check_status "GET / → 404"            "404" "$BASE_URL/"
 
-# ── API 端點 ──────────────────────────────────────────────
+# ── API 端點（hello） ──────────────────────────────────────
 echo ""
 echo "── API 端點 ──"
 check_status "GET /api/v1/hello → 200" "200" "$BASE_URL/api/v1/hello"
@@ -119,29 +123,11 @@ check_status "X-Http-Method-Override 非法 → 405" "405" "$BASE_URL/api/v1/hel
 check_status "X-Http-Method 合法 override POST→GET → 200" "200" "$BASE_URL/api/v1/hello" \
     -X POST -H "X-Http-Method: GET"
 
-# ── API 驗證（httparg） ─────────────────────────────────
-echo ""
-echo "── API 驗證 ──"
-# GET /api/v1/example：query 驗證 + assertion.max CAP 行為
-check_status "GET /api/v1/example 無 query → 200"               "200" "$BASE_URL/api/v1/example"
-check_body   "GET /api/v1/example 含 items"                     "items" "$BASE_URL/api/v1/example"
-check_status "GET /api/v1/example?status=unknown → 400"         "400" "$BASE_URL/api/v1/example?status=unknown"
-check_status "GET /api/v1/example?limit=999 → 200（max 是 CAP）" "200" "$BASE_URL/api/v1/example?limit=999"
-check_body   "GET limit=999 response capped to 100"             '"limit":100' "$BASE_URL/api/v1/example?limit=999"
+check_status "X-Http-Method 小寫 get → 200" "200" "$BASE_URL/api/v1/hello" \
+    -X POST -H "X-Http-Method: get"
 
-# POST /api/v1/example：JSON body 驗證
-check_status "POST valid body → 200" "200" "$BASE_URL/api/v1/example" \
-    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":50}'
-check_body   "POST valid body 含 created" "created" "$BASE_URL/api/v1/example" \
-    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":50}'
-check_status "POST 缺 name → 400" "400" "$BASE_URL/api/v1/example" \
-    -X POST -H 'Content-Type: application/json' -d '{"amount":50}'
-check_status "POST amount=-1 → 400（non_negative_number）" "400" "$BASE_URL/api/v1/example" \
-    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":-1}'
-check_status "POST amount=abc → 400（type coercion）" "400" "$BASE_URL/api/v1/example" \
-    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":"abc"}'
-check_status "POST amount=99999 → 400（業務 guard >10000）" "400" "$BASE_URL/api/v1/example" \
-    -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":99999}'
+check_body "405 body 含 UNSUPPORTED" '"code":"UNSUPPORTED"' "$BASE_URL/api/v1/hello" \
+    -H "X-Http-Method: FOO"
 
 # ── 安全 Headers ─────────────────────────────────────────
 echo ""
@@ -151,6 +137,39 @@ check_header    "X-Content-Type-Options: nosniff" "X-Content-Type-Options" "$BAS
 check_header    "X-Frame-Options: DENY" "X-Frame-Options" "$BASE_URL/api/v1/hello"
 check_header    "Content-Security-Policy" "Content-Security-Policy" "$BASE_URL/api/v1/hello"
 check_header    "Referrer-Policy" "Referrer-Policy" "$BASE_URL/api/v1/hello"
+
+# ══════════════════════════════════════════════════════════════
+# example endpoint 測試（若已刪除則自動跳過）
+# ══════════════════════════════════════════════════════════════
+echo ""
+echo "── example endpoint 測試 ──"
+EXAMPLE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/example")
+if [ "$EXAMPLE_STATUS" = "404" ]; then
+    echo "（example endpoints 已刪除，跳過此區段）"
+else
+    # GET /api/v1/example：query 驗證 + assertion.max CAP 行為
+    check_status "GET /api/v1/example 無 query → 200"               "200" "$BASE_URL/api/v1/example"
+    check_body   "GET /api/v1/example 含 items"                     "items" "$BASE_URL/api/v1/example"
+    check_status "GET /api/v1/example?status=unknown → 400"         "400" "$BASE_URL/api/v1/example?status=unknown"
+    check_status "GET /api/v1/example?limit=999 → 200（max 是 CAP）" "200" "$BASE_URL/api/v1/example?limit=999"
+    check_body   "GET limit=999 response capped to 100"             '"limit":100' "$BASE_URL/api/v1/example?limit=999"
+    check_body   "400 body 含 code=INVALID_ARGUMENT" '"code":"INVALID_ARGUMENT"' \
+        "$BASE_URL/api/v1/example?status=unknown"
+
+    # POST /api/v1/example：JSON body 驗證
+    check_status "POST valid body → 200" "200" "$BASE_URL/api/v1/example" \
+        -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":50}'
+    check_body   "POST valid body 含 created" "created" "$BASE_URL/api/v1/example" \
+        -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":50}'
+    check_status "POST 缺 name → 400" "400" "$BASE_URL/api/v1/example" \
+        -X POST -H 'Content-Type: application/json' -d '{"amount":50}'
+    check_status "POST amount=-1 → 400（non_negative_number）" "400" "$BASE_URL/api/v1/example" \
+        -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":-1}'
+    check_status "POST amount=abc → 400（type coercion）" "400" "$BASE_URL/api/v1/example" \
+        -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":"abc"}'
+    check_status "POST amount=99999 → 400（業務 guard >10000）" "400" "$BASE_URL/api/v1/example" \
+        -X POST -H 'Content-Type: application/json' -d '{"name":"demo","amount":99999}'
+fi
 
 # ── 結果摘要 ─────────────────────────────────────────────
 echo ""
